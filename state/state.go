@@ -38,7 +38,7 @@ type CipherState struct {
 // and sets the starting nonce and key values.
 func (cs *CipherState) InitializeKey(key []byte) {
 	copy(cs.k, key)
-	cs.n = make([]byte, 8)
+	cs.n = uint64(0)
 	cs.initialized = true
 }
 
@@ -53,15 +53,14 @@ func (cs CipherState) HasKey() bool {
 // EncryptWithAD will return the plaintext. Otherwise, it will return
 // a ciphertext.
 func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
-	panic("EncryptWithAD not implemented")
 	if cs.HasKey() {
-		if n == NONCEMAX {
+		if cs.n == NONCEMAX {
 			//TODO(kkl): better error handling here.
 			panic("nonce max hit!")
 		}
 		nb := make([]byte, 8)
-		binary.PutUvarint(nb, n)
-		return cs.c.EncryptWithAD(k, nb, ad, plaintext)
+		binary.PutUvarint(nb, cs.n)
+		return cs.c.Encrypt(cs.k, nb, ad, plaintext)
 	} else {
 		//TODO(kkl): If this used to signal an encryption error modify the return type.
 		return plaintext
@@ -72,17 +71,17 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 // data (ad) returning an error if authentication failed. If CipherState is
 // unitialized, the ciphertext will be returned.
 func (cs *CipherState) DecryptWithAD(ad, ciphertext []byte) ([]byte, error) {
-	panic("DecryptWithAD not implemented")
 	if cs.HasKey() {
-		return ciphertext
-	} else {
-		if n == NONCEMAX {
+		if cs.n == NONCEMAX {
 			//TODO(kkl): better error handling here.
 			panic("nonce max hit!")
 		}
 		nb := make([]byte, 8)
-		binary.PutUvarint(nb, n)
-		return cs.c.DecryptWithAD(k, nb, ad, plaintext)
+		binary.PutUvarint(nb, cs.n)
+		return cs.c.Decrypt(cs.k, nb, ad, ciphertext)
+	} else {
+		//TODO(kkl): This may need to return an error.
+		return ciphertext, nil
 	}
 }
 
@@ -97,20 +96,19 @@ type SymmetricState struct {
 	ck []byte
 	// H is the handshake hash.
 	h []byte
-	// name is the protocol name that was used to initialize the struct
-	name []byte
 }
 
 //TODO(kkl): Document.
 func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 	lpn := len(protocolName)
-	if lpn <= HASHLEN {
-		difference := HASHLEN - lpn
-		ss.H = make([]byte, HASHLEN)
+	hl := ss.cs.hf.HashLen()
+	if lpn <= hl {
+		ss.h = make([]byte, hl)
 		copy(ss.h, protocolName)
+	} else {
+		ss.h = ss.cs.hf.Hash(protocolName)
 	}
 	copy(ss.ck, ss.h)
-	ss.name = protocolName
 	ss.cs = CipherState{}
 	protocolString := string(protocolName)
 	tokens := strings.Split(protocolString, "_")
@@ -122,7 +120,7 @@ func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 	DHToken := tokens[2]
 	switch DHToken {
 	case "25519":
-		ss.cs.dh = diffiehellman.Curve25519Function{}
+		ss.cs.dh = dh.Curve25519Function{}
 	default:
 		panic("DiffieHellman function not supported")
 	}
@@ -147,7 +145,7 @@ func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 
 // MixKey updates the CipherState keys with the input bytes.
 func (ss *SymmetricState) MixKey(inputKeyMaterial []byte) {
-	ck, tempK := HKDF(ss.ck, inputKeyMaterial)
+	ck, tempK := ss.cs.hf.HKDF(ss.ck, inputKeyMaterial)
 	ss.ck = ck
 	if ss.cs.hf.HashLen() == 64 {
 		tempK = tempK[:32]
@@ -165,7 +163,7 @@ func (ss *SymmetricState) MixHash(data []byte) {
 // ciphertext. If the SymmetricState struct is unitialized, it will return the
 // input plaintext.
 func (ss *SymmetricState) EncryptAndHash(plaintext []byte) (ciphertext []byte) {
-	ciphertext = EncryptWithAD(ss.h, plaintext)
+	ciphertext = ss.cs.EncryptWithAD(ss.h, plaintext)
 	ss.MixHash(ciphertext)
 	return ciphertext
 }
@@ -174,21 +172,24 @@ func (ss *SymmetricState) EncryptAndHash(plaintext []byte) (ciphertext []byte) {
 // plaintext. If the SymmetricState struct is unitialized, it will return the
 // input ciphertext.
 func (ss *SymmetricState) DecryptAndHash(ciphertext []byte) (plaintext []byte) {
-	plaintext = DecryptWithAD(ss.h, ciphertext)
+	plaintext, err := ss.cs.DecryptWithAD(ss.h, ciphertext)
+	if err != nil {
+		panic("authentication error. this should kill the connection")
+	}
 	ss.MixHash(ciphertext)
 	return plaintext
 }
 
 //TODO(kkl): Document.
-func (ss *SymmetricState) Split() (ss1, ss2 SymmetricState) {
-	tempK1, tempK2 = HKDF(ss.ck, []byte{})
+func (ss *SymmetricState) Split() (ss1, ss2 CipherState) {
+	tempK1, tempK2 := ss.cs.hf.HKDF(ss.ck, []byte{})
 
 	if ss.cs.hf.HashLen() == 64 {
 		tempK1 = tempK1[:32]
 		tempK2 = tempK2[:32]
 	}
-	ss1 = InitializeSymmetric(ss.name)
-	ss2 = InitializeSymmetric(ss.name)
+	ss1 = CipherState{}
+	ss2 = CipherState{}
 	ss1.InitializeKey(tempK1)
 	ss2.InitializeKey(tempK2)
 	return
@@ -220,8 +221,8 @@ type HandshakeState struct {
 //TODO(kkl): Document.
 func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
 	//TODO(kkl): Can premessage patterns have dhxy operations in them? If so, account for them here.
-	for _, s := range handshakePattern.InitiatorPreMessages {
-		switch s {
+	for _, ipm := range handshakePattern.InitiatorPreMessages {
+		switch ipm {
 		case "s":
 			if !s.Initialized {
 				panic("initiator static key not supplied for premessage")
@@ -244,29 +245,32 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 		}
 	}
 
-	for _, s := range handshakePattern.ResponderPreMessages {
-		switch s {
-		case "s":
-			if !rs.Initialized {
-				panic("responder static key not supplied for premessage")
-			}
-			hss.rs = rs
-		case "e":
-			if !re.Initialized {
-				panic("responder static key not supplied for premessage")
-			}
-			hss.re = re
-		case "s,e":
-			if !re.Initialized || !rs.Initialized {
-				panic("responder static or ephemeral key not supplied for premessage")
-			}
-			hss.rs = rs
-			hss.re = re
-		case "":
-		default:
-			panic("invalid responder premessage")
-		}
-	}
+	//TODO(kkl): PublicKey structs need a way to determine if they are
+	//intialized or just the zero value. Until then, this case statement
+	//wont' work.
+	//for _, rpm := range handshakePattern.ResponderPreMessages {
+	//	switch rpm {
+	//	case "s":
+	//		if !rs.Initialized {
+	//			panic("responder static key not supplied for premessage")
+	//		}
+	//		hss.rs = rs
+	//	case "e":
+	//		if !re.Initialized {
+	//			panic("responder static key not supplied for premessage")
+	//		}
+	//		hss.re = re
+	//	case "s,e":
+	//		if !re.Initialized || !rs.Initialized {
+	//			panic("responder static or ephemeral key not supplied for premessage")
+	//		}
+	//		hss.rs = rs
+	//		hss.re = re
+	//	case "":
+	//	default:
+	//		panic("invalid responder premessage")
+	//	}
+	//}
 
 	//TODO(kkl): Hardcoding this for now!
 	protocolName := []byte("Noise_NN_25519_AESGCM_SHA256")
@@ -282,12 +286,12 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 //TODO(kkl): Document this!
 func (hss *HandshakeState) WriteMessage(payload, messageBuffer []byte) (c1, c2 CipherState) {
 
-	if len(MessagePattern) == 0 {
+	if len(hss.mp) == 0 {
 		return hss.ss.Split()
 	}
 
-	mp := hss.MessagePattern[0]
-	hss.mp = hss.MessagePattern[1:]
+	mp := hss.mp[0]
+	hss.mp = hss.mp[1:]
 
 	tokens := strings.Split(mp, ",")
 
@@ -295,11 +299,11 @@ func (hss *HandshakeState) WriteMessage(payload, messageBuffer []byte) (c1, c2 C
 		switch t {
 		case "s":
 			ct := hss.ss.EncryptAndHash(hss.s.Public)
-			append(messageBuffer, ct...)
+			_ = append(messageBuffer, ct...)
 		case "e":
-			e := hss.ss.cs.dh.GenerateKeypair()
+			e := hss.ss.cs.dh.GenerateKeyPair()
 			hss.e = e
-			append(messageBuffer, e.Public...)
+			_ = append(messageBuffer, e.Public...)
 			hss.ss.MixHash(e.Public)
 		case "dhee":
 			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.re))
@@ -314,7 +318,7 @@ func (hss *HandshakeState) WriteMessage(payload, messageBuffer []byte) (c1, c2 C
 		}
 	}
 
-	append(messageBuffer, EncryptAndHash(payload))
+	_ = append(messageBuffer, hss.ss.EncryptAndHash(payload)...)
 	return
 }
 
