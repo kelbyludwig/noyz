@@ -2,18 +2,17 @@ package cipher
 
 import (
 	"crypto/aes"
-	"crypto/cipher"
+	cipherstdlib "crypto/cipher"
 )
 
+// CipherFunction is an interface that is used for symmetric encryption and
+// authentication. All symmetric operations must implement this interface.
 type CipherFunction interface {
 	Encrypt(key, nonce, ad, plaintext []byte) (ciphertext []byte)
 	Decrypt(key, nonce, ad, ciphertext []byte) (plaintext []byte, err error)
-	//TODO(kkl): All *Function interfaces should have a function that returns
-	// a "parent" noise session. Certain error checks in certain functions require
-	// knowledge of other *Function information.
-	//NoiseSession() NoiseSession
 }
 
+// GCMFunction implements the CipherFunction interface using the AESGCM AEAD.
 type GCMFunction struct{}
 
 // Encrypt encrypts and authenticates the supplied plaintext
@@ -27,12 +26,12 @@ func (g GCMFunction) Encrypt(key, nonce, ad, plaintext []byte) (ciphertext []byt
 		panic(err)
 	}
 
-	aead, err := aes.NewGCMWithNonceSize(block, 8)
+	aead, err := cipherstdlib.NewGCMWithNonceSize(block, 8)
 	if err != nil {
 		panic(err)
 	}
 
-	return aead.Seal(ciphertext, n, plaintext, ad)
+	return aead.Seal(ciphertext, nonce, plaintext, ad)
 }
 
 // Decrypt decrypts and authenticates the supplied ciphertext
@@ -46,7 +45,7 @@ func (g GCMFunction) Decrypt(key, nonce, ad, ciphertext []byte) (plaintext []byt
 		panic(err)
 	}
 
-	aead, err := aes.NewGCMWithNonceSize(block, 8)
+	aead, err := cipherstdlib.NewGCMWithNonceSize(block, 8)
 	if err != nil {
 		panic(err)
 	}

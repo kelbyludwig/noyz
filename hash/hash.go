@@ -13,27 +13,27 @@ type HashFunction interface {
 	HKDF(chainingKey, inputKeyMaterial []byte) (output1, output2 []byte)
 }
 
-type SHA256Hash struct{}
+type SHA256Function struct{}
 
-func (s SHA256Hash) Hash(data []byte) []byte {
+func (s SHA256Function) Hash(data []byte) []byte {
 	return sha256.New().Sum(data)
 }
 
-func (s SHA256Hash) HashLen() int {
+func (s SHA256Function) HashLen() int {
 	return 32
 }
 
-func (s SHA256Hash) BlockLen() int {
+func (s SHA256Function) BlockLen() int {
 	return 64
 }
 
-func (s SHA256Hash) HMAC(key, data []byte) []byte {
+func (s SHA256Function) HMAC(key, data []byte) []byte {
 	h := hmac.New(sha256.New, key)
 	mac := h.Sum(data)
 	return mac
 }
 
-func (s SHA256Hash) HKDF(chainingKey, inputKeyMaterial []byte) (output1, output2 []byte) {
+func (s SHA256Function) HKDF(chainingKey, inputKeyMaterial []byte) (output1, output2 []byte) {
 	if len(chainingKey) != s.HashLen() {
 		panic("chainingKey length was not equal to HASHLEN")
 	}
