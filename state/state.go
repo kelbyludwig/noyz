@@ -62,7 +62,14 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 		binary.PutUvarint(nb, cs.n)
 		return cs.c.Encrypt(cs.k, nb, ad, plaintext)
 	} else {
-		//TODO(kkl): If this used to signal an encryption error modify the return type.
+		// EncryptWithAD assumes that the CipherState will be
+		// initialized as soon as possible (i.e. as soon as there is a shared
+		// key between parties). Therefore, returning the plaintext instead
+		// of a ciphertext is not an error. It just simplifies the API
+		// and state machine. In other words, assuming the implementation is sound
+		// the only time this will happen is prior to *any* DH operations.
+		// TODO(kkl): I think this comment is an interesting
+		// assumption. Might be worth testing.
 		return plaintext
 	}
 }
@@ -323,6 +330,48 @@ func (hss *HandshakeState) WriteMessage(payload, messageBuffer []byte) (c1, c2 C
 }
 
 //TODO(kkl): Document this!
-func (hss *HandshakeState) ReadMessage(message, payloadBuffer []byte) {
-	panic("ReadMessage not implemented")
+func (hss *HandshakeState) ReadMessage(message, payloadBuffer []byte) (c1, c2 CipherState) {
+	if len(hss.mp) == 0 {
+		return hss.ss.Split()
+	}
+
+	mp := hss.mp[0]
+	hss.mp = hss.mp[1:]
+
+	tokens := strings.Split(mp, ",")
+
+	var temp []byte
+	for _, t := range tokens {
+		switch t {
+		case "s":
+			dhl := hss.ss.cs.dh.DHLen()
+			if hss.ss.cs.HasKey() {
+				temp = message[dhl : dhl+16]
+				hss.rs = hss.ss.DecryptAndHash(temp)
+				temp = message[dhl+16:]
+			} else {
+				temp = message[:dhl]
+				hss.rs = hss.ss.DecryptAndHash(temp)
+				temp = message[dhl:]
+			}
+		case "e":
+			dhl := hss.ss.cs.dh.DHLen()
+			hss.re = message[:dhl]
+			hss.ss.MixHash(hss.re)
+		case "dhee":
+			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.re))
+		case "dhes":
+			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.s, hss.re))
+		case "dhse":
+			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.rs))
+		case "dhss":
+			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.s, hss.rs))
+		default:
+			panic("invalid message pattern token")
+		}
+	}
+
+	_ = append(payloadBuffer, hss.ss.DecryptAndHash(temp)...)
+	return
+
 }
