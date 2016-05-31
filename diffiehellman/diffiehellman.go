@@ -37,10 +37,14 @@ func (c Curve25519Function) GenerateKeyPair() (keyPair KeyPair) {
 
 	keyPair.Private = privateKey[:]
 	keyPair.Public = publicKey[:]
+	keyPair.Initialized = true
 	return
 }
 
 func (c Curve25519Function) DH(keyPair KeyPair, publicKey PublicKey) SharedPoint {
+	if keyPair.Initialized == false {
+		panic("cannot perform DH operation on uninitialized keypair")
+	}
 	var pub [32]byte
 	var pri [32]byte
 	copy(pub[:], publicKey)

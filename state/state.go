@@ -107,16 +107,10 @@ type SymmetricState struct {
 
 //TODO(kkl): Document.
 func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
-	lpn := len(protocolName)
-	hl := ss.cs.hf.HashLen()
-	if lpn <= hl {
-		ss.h = make([]byte, hl)
-		copy(ss.h, protocolName)
-	} else {
-		ss.h = ss.cs.hf.Hash(protocolName)
-	}
-	copy(ss.ck, ss.h)
+
 	ss.cs = CipherState{}
+	ss.ck = []byte{}
+
 	protocolString := string(protocolName)
 	tokens := strings.Split(protocolString, "_")
 
@@ -148,6 +142,16 @@ func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 		panic("Hash function not supported")
 	}
 
+	lpn := len(protocolName)
+	hl := ss.cs.hf.HashLen()
+	if lpn <= hl {
+		ss.h = make([]byte, hl)
+		copy(ss.h, protocolName)
+	} else {
+		ss.h = ss.cs.hf.Hash(protocolName)
+	}
+	copy(ss.ck, ss.h)
+
 }
 
 // MixKey updates the CipherState keys with the input bytes.
@@ -163,7 +167,8 @@ func (ss *SymmetricState) MixKey(inputKeyMaterial []byte) {
 // MixHash updates the SymmetricState hash. MixHash is used to maintain
 // transcript integrity.
 func (ss *SymmetricState) MixHash(data []byte) {
-	ss.h = ss.cs.hf.Hash(append(ss.h, data...))
+	temp := append(ss.h, data...)
+	ss.h = ss.cs.hf.Hash(temp)
 }
 
 // EncryptAndHash will encrypt the supplied plaintext and return the
@@ -227,6 +232,7 @@ type HandshakeState struct {
 
 //TODO(kkl): Document.
 func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
+
 	//TODO(kkl): Can premessage patterns have dhxy operations in them? If so, account for them here.
 	for _, ipm := range handshakePattern.InitiatorPreMessages {
 		switch ipm {
@@ -282,6 +288,7 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 	//TODO(kkl): Hardcoding this for now!
 	protocolName := []byte("Noise_NN_25519_AESGCM_SHA256")
 
+	hss.ss = SymmetricState{}
 	hss.ss.InitializeSymmetric(protocolName)
 	hss.ss.MixHash(prologue)
 	//TODO(kkl): Implment pre-message mixhashing ("Calls MixHash() once for each public key listed..." from section 5.3)
@@ -291,7 +298,7 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 }
 
 //TODO(kkl): Document this!
-func (hss *HandshakeState) WriteMessage(payload, messageBuffer []byte) (c1, c2 CipherState) {
+func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (c1, c2 CipherState) {
 
 	if len(hss.mp) == 0 {
 		return hss.ss.Split()
@@ -306,11 +313,12 @@ func (hss *HandshakeState) WriteMessage(payload, messageBuffer []byte) (c1, c2 C
 		switch t {
 		case "s":
 			ct := hss.ss.EncryptAndHash(hss.s.Public)
-			_ = append(messageBuffer, ct...)
+			*messageBuffer = append(*messageBuffer, ct...)
 		case "e":
+			_ = "breakpoint" //WriteMessage Ephemeral case
 			e := hss.ss.cs.dh.GenerateKeyPair()
 			hss.e = e
-			_ = append(messageBuffer, e.Public...)
+			*messageBuffer = append(*messageBuffer, e.Public...)
 			hss.ss.MixHash(e.Public)
 		case "dhee":
 			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.re))
@@ -325,12 +333,13 @@ func (hss *HandshakeState) WriteMessage(payload, messageBuffer []byte) (c1, c2 C
 		}
 	}
 
-	_ = append(messageBuffer, hss.ss.EncryptAndHash(payload)...)
+	*messageBuffer = append(*messageBuffer, hss.ss.EncryptAndHash(payload)...)
 	return
 }
 
 //TODO(kkl): Document this!
-func (hss *HandshakeState) ReadMessage(message, payloadBuffer []byte) (c1, c2 CipherState) {
+func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c1, c2 CipherState) {
+
 	if len(hss.mp) == 0 {
 		return hss.ss.Split()
 	}
@@ -371,7 +380,7 @@ func (hss *HandshakeState) ReadMessage(message, payloadBuffer []byte) (c1, c2 Ci
 		}
 	}
 
-	_ = append(payloadBuffer, hss.ss.DecryptAndHash(temp)...)
+	*payloadBuffer = append(*payloadBuffer, hss.ss.DecryptAndHash(temp)...)
 	return
 
 }
