@@ -99,9 +99,9 @@ type SymmetricState struct {
 	// cs also contains the relevant data structures that perform
 	// all crypto-operations (e.g. DH, symmetric encryption, hashing, etc.)
 	cs CipherState
-	// CK is the chaining key.
+	// ck is the chaining key.
 	ck []byte
-	// H is the handshake hash.
+	// h is the handshake hash.
 	h []byte
 }
 
@@ -109,7 +109,6 @@ type SymmetricState struct {
 func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 
 	ss.cs = CipherState{}
-	ss.ck = []byte{}
 
 	protocolString := string(protocolName)
 	tokens := strings.Split(protocolString, "_")
@@ -150,6 +149,7 @@ func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 	} else {
 		ss.h = ss.cs.hf.Hash(protocolName)
 	}
+	ss.ck = make([]byte, ss.cs.hf.HashLen())
 	copy(ss.ck, ss.h)
 
 }
@@ -315,13 +315,13 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 			ct := hss.ss.EncryptAndHash(hss.s.Public)
 			*messageBuffer = append(*messageBuffer, ct...)
 		case "e":
-			_ = "breakpoint" //WriteMessage Ephemeral case
 			e := hss.ss.cs.dh.GenerateKeyPair()
 			hss.e = e
 			*messageBuffer = append(*messageBuffer, e.Public...)
 			hss.ss.MixHash(e.Public)
 		case "dhee":
-			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.re))
+			o := hss.ss.cs.dh.DH(hss.e, hss.re)
+			hss.ss.MixKey(o)
 		case "dhes":
 			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.rs))
 		case "dhse":
@@ -357,11 +357,11 @@ func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c
 			if hss.ss.cs.HasKey() {
 				temp = message[dhl : dhl+16]
 				hss.rs = hss.ss.DecryptAndHash(temp)
-				temp = message[dhl+16:]
+				copy(temp, message[dhl+16:])
 			} else {
 				temp = message[:dhl]
 				hss.rs = hss.ss.DecryptAndHash(temp)
-				temp = message[dhl:]
+				copy(temp, message[dhl:])
 			}
 		case "e":
 			dhl := hss.ss.cs.dh.DHLen()

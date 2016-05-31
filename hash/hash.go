@@ -38,7 +38,7 @@ func (s SHA256Function) HKDF(chainingKey, inputKeyMaterial []byte) (output1, out
 		panic("chainingKey length was not equal to HASHLEN")
 	}
 
-	if len(inputKeyMaterial) != 0 || len(inputKeyMaterial) != 32 {
+	if len(inputKeyMaterial) != 0 && len(inputKeyMaterial) != 32 {
 		//TODO(kkl): Check for len(inputKeyMaterial) != DHLEN
 		panic("inputKeyMaterial was not a valid input size")
 	}
