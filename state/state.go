@@ -37,6 +37,7 @@ type CipherState struct {
 // InitializeKey initializes a CipherState struct
 // and sets the starting nonce and key values.
 func (cs *CipherState) InitializeKey(key []byte) {
+	cs.k = make([]byte, 32)
 	copy(cs.k, key)
 	cs.n = uint64(0)
 	cs.initialized = true
