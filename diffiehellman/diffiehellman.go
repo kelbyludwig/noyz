@@ -25,14 +25,13 @@ type Curve25519Function struct{}
 
 func (c Curve25519Function) GenerateKeyPair() (keyPair KeyPair) {
 
-	var privateKey [32]byte
+	var privateKey, publicKey [32]byte
 	_, err := rand.Read(privateKey[:])
 
 	if err != nil {
 		panic(err)
 	}
 
-	var publicKey [32]byte
 	curve25519.ScalarBaseMult(&publicKey, &privateKey)
 
 	keyPair.Private = privateKey[:]
@@ -45,12 +44,11 @@ func (c Curve25519Function) DH(keyPair KeyPair, publicKey PublicKey) SharedPoint
 	if keyPair.Initialized == false {
 		panic("cannot perform DH operation on uninitialized keypair")
 	}
-	var pub [32]byte
-	var pri [32]byte
+	var ss, pub, pri [32]byte
 	copy(pub[:], publicKey)
 	copy(pri[:], keyPair.Private)
-	curve25519.ScalarBaseMult(&pub, &pri)
-	return pub[:]
+	curve25519.ScalarMult(&ss, &pri, &pub)
+	return ss[:]
 }
 
 func (c Curve25519Function) DHLen() int {
