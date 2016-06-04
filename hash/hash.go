@@ -16,7 +16,8 @@ type HashFunction interface {
 type SHA256Function struct{}
 
 func (s SHA256Function) Hash(data []byte) []byte {
-	return sha256.New().Sum(data)
+	r := sha256.Sum256(data)
+	return r[:]
 }
 
 func (s SHA256Function) HashLen() int {
