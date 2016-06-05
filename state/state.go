@@ -223,9 +223,9 @@ type HandshakePattern struct {
 	// responderPreMessages are keys that are known to an responder prior
 	// to a handshake. Can be empty.
 	responderPreMessages []string
-	// messagePattern describes the messages that are exchanged between the
+	// MessagePattern describes the messages that are exchanged between the
 	// initiator and the responder to determine a shared secret.
-	messagePattern []string
+	MessagePattern []string
 }
 
 // HandshakeState keeps track of the state during a Noise handshake.
@@ -247,8 +247,12 @@ type HandshakeState struct {
 // Initialize initializes a HandshakeState struct.
 func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
 
-	//TODO(kkl): Can premessage patterns have dhxy operations in them? If so, account for them here.
-	for _, ipm := range handshakePattern.InitiatorPreMessages {
+	//TODO(kkl): Hardcoding this for now!
+	protocolName := []byte("Noise_NN_25519_AESGCM_SHA256")
+	hss.ss = SymmetricState{}
+	hss.ss.InitializeSymmetric(protocolName)
+
+	for _, ipm := range handshakePattern.initiatorPreMessages {
 		switch ipm {
 		case "s":
 			if !s.Initialized {
@@ -272,38 +276,31 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 		}
 	}
 
-	//TODO(kkl): PublicKey structs need a way to determine if they are
-	//intialized or just the zero value. Until then, this case statement
-	//wont' work.
-	//for _, rpm := range handshakePattern.ResponderPreMessages {
-	//	switch rpm {
-	//	case "s":
-	//		if !rs.Initialized {
-	//			panic("responder static key not supplied for premessage")
-	//		}
-	//		hss.rs = rs
-	//	case "e":
-	//		if !re.Initialized {
-	//			panic("responder static key not supplied for premessage")
-	//		}
-	//		hss.re = re
-	//	case "s,e":
-	//		if !re.Initialized || !rs.Initialized {
-	//			panic("responder static or ephemeral key not supplied for premessage")
-	//		}
-	//		hss.rs = rs
-	//		hss.re = re
-	//	case "":
-	//	default:
-	//		panic("invalid responder premessage")
-	//	}
-	//}
+	nullKey := make([]byte, hss.ss.cs.dh.DHLen())
+	for _, rpm := range handshakePattern.responderPreMessages {
+		switch rpm {
+		case "s":
+			if string(rs) == string(nullKey) {
+				panic("responder static key not supplied for premessage")
+			}
+			hss.rs = rs
+		case "e":
+			if string(re) == string(nullKey) {
+				panic("responder static key not supplied for premessage")
+			}
+			hss.re = re
+		case "s,e":
+			if string(re) == string(nullKey) || string(rs) == string(nullKey) {
+				panic("responder static or ephemeral key not supplied for premessage")
+			}
+			hss.rs = rs
+			hss.re = re
+		case "":
+		default:
+			panic("invalid responder premessage")
+		}
+	}
 
-	//TODO(kkl): Hardcoding this for now!
-	protocolName := []byte("Noise_NN_25519_AESGCM_SHA256")
-
-	hss.ss = SymmetricState{}
-	hss.ss.InitializeSymmetric(protocolName)
 	hss.ss.MixHash(prologue)
 	//TODO(kkl): Implment pre-message mixhashing ("Calls MixHash() once for each public key listed..." from section 5.3)
 	hss.mp = handshakePattern.MessagePattern
