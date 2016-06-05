@@ -44,6 +44,12 @@ func (c Curve25519Function) DH(keyPair KeyPair, publicKey PublicKey) SharedPoint
 	if keyPair.Initialized == false {
 		panic("cannot perform DH operation on uninitialized keypair")
 	}
+
+	nullKey := make([]byte, len(publicKey))
+	if string(publicKey) == string(nullKey) {
+		return nullKey
+	}
+
 	var ss, pub, pri [32]byte
 	copy(pub[:], publicKey)
 	copy(pri[:], keyPair.Private)
