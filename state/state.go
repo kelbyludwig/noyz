@@ -260,21 +260,21 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 				panic("initiator static key not supplied for premessage")
 			}
 			hss.s = s
-			hss.ss.MixHash(s)
+			hss.ss.MixHash(s.Public)
 		case "e":
 			if !e.Initialized {
 				panic("initiator static key not supplied for premessage")
 			}
 			hss.e = e
-			hss.ss.MixHash(e)
+			hss.ss.MixHash(e.Public)
 		case "s,e":
 			if !e.Initialized || !s.Initialized {
 				panic("initiator static or ephemeral key not supplied for premessage")
 			}
 			hss.s = s
 			hss.e = e
-			hss.ss.MixHash(s)
-			hss.ss.MixHash(e)
+			hss.ss.MixHash(s.Public)
+			hss.ss.MixHash(e.Public)
 		case "":
 		default:
 			panic("invalid initiator premessage")
@@ -315,7 +315,8 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 
 }
 
-//TODO(kkl): Document this!
+// WriteMessage takes a payload byte sequence which may be zero-length, and a
+// messageBuffer to write the output into.
 func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (c1, c2 CipherState) {
 
 	var tokens []string
@@ -355,7 +356,8 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 	return
 }
 
-//TODO(kkl): Document this!
+// ReadMessage takes a byte sequence containing a Noise handshake message, and
+// a payloadBuffer to write the message's plaintext payload into.
 func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c1, c2 CipherState) {
 
 	var tokens []string
