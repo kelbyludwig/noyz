@@ -61,7 +61,8 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 		}
 		nb := make([]byte, 8)
 		binary.PutUvarint(nb, cs.n)
-		return cs.c.Encrypt(cs.k, nb, ad, plaintext)
+		ct := cs.c.Encrypt(cs.k, nb, ad, plaintext)
+		return ct
 	} else {
 		// EncryptWithAD assumes that the CipherState will be
 		// initialized as soon as possible (i.e. as soon as there is a shared
@@ -69,8 +70,10 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 		// of a ciphertext is not an error. It just simplifies the API
 		// and state machine. In other words, assuming the implementation is sound
 		// the only time this will happen is prior to *any* DH operations.
+
 		// TODO(kkl): I think this comment is an interesting
 		// assumption. Might be worth testing.
+
 		return plaintext
 	}
 }
@@ -86,9 +89,9 @@ func (cs *CipherState) DecryptWithAD(ad, ciphertext []byte) ([]byte, error) {
 		}
 		nb := make([]byte, 8)
 		binary.PutUvarint(nb, cs.n)
-		return cs.c.Decrypt(cs.k, nb, ad, ciphertext)
+		plaintext, err := cs.c.Decrypt(cs.k, nb, ad, ciphertext)
+		return plaintext, err
 	} else {
-		//TODO(kkl): This may need to return an error.
 		return ciphertext, nil
 	}
 }
@@ -150,6 +153,7 @@ func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 	} else {
 		ss.h = ss.cs.hf.Hash(protocolName)
 	}
+
 	ss.ck = make([]byte, ss.cs.hf.HashLen())
 	copy(ss.ck, ss.h)
 
@@ -350,26 +354,27 @@ func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c
 
 	tokens := strings.Split(mp, ",")
 
-	var temp []byte
 	for _, t := range tokens {
 		switch t {
 		case "s":
 			dhl := hss.ss.cs.dh.DHLen()
 			if hss.ss.cs.HasKey() {
-				temp = message[dhl : dhl+16]
+				temp := message[:dhl+16]
 				hss.rs = hss.ss.DecryptAndHash(temp)
-				copy(temp, message[dhl+16:])
+				message = message[dhl+16:]
 			} else {
-				temp = message[:dhl]
+				temp := message[:dhl]
 				hss.rs = hss.ss.DecryptAndHash(temp)
-				copy(temp, message[dhl:])
+				message = message[dhl:]
 			}
 		case "e":
 			dhl := hss.ss.cs.dh.DHLen()
 			hss.re = message[:dhl]
 			hss.ss.MixHash(hss.re)
+			message = message[dhl:]
 		case "dhee":
-			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.re))
+			o := hss.ss.cs.dh.DH(hss.e, hss.re)
+			hss.ss.MixKey(o)
 		case "dhes":
 			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.s, hss.re))
 		case "dhse":
@@ -381,7 +386,8 @@ func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c
 		}
 	}
 
-	*payloadBuffer = append(*payloadBuffer, hss.ss.DecryptAndHash(temp)...)
+	_ = "breakpoint"
+	*payloadBuffer = append(*payloadBuffer, hss.ss.DecryptAndHash(message)...)
 	return
 
 }
