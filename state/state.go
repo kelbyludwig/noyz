@@ -251,6 +251,7 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 	protocolName := []byte("Noise_NN_25519_AESGCM_SHA256")
 	hss.ss = SymmetricState{}
 	hss.ss.InitializeSymmetric(protocolName)
+	hss.ss.MixHash(prologue)
 
 	for _, ipm := range handshakePattern.initiatorPreMessages {
 		switch ipm {
@@ -259,17 +260,21 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 				panic("initiator static key not supplied for premessage")
 			}
 			hss.s = s
+			hss.ss.MixHash(s)
 		case "e":
 			if !e.Initialized {
 				panic("initiator static key not supplied for premessage")
 			}
-			hss.e = s
+			hss.e = e
+			hss.ss.MixHash(e)
 		case "s,e":
 			if !e.Initialized || !s.Initialized {
 				panic("initiator static or ephemeral key not supplied for premessage")
 			}
 			hss.s = s
 			hss.e = e
+			hss.ss.MixHash(s)
+			hss.ss.MixHash(e)
 		case "":
 		default:
 			panic("invalid initiator premessage")
@@ -284,25 +289,27 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 				panic("responder static key not supplied for premessage")
 			}
 			hss.rs = rs
+			hss.ss.MixHash(rs)
 		case "e":
 			if string(re) == string(nullKey) {
 				panic("responder static key not supplied for premessage")
 			}
 			hss.re = re
+			hss.ss.MixHash(re)
 		case "s,e":
 			if string(re) == string(nullKey) || string(rs) == string(nullKey) {
 				panic("responder static or ephemeral key not supplied for premessage")
 			}
 			hss.rs = rs
 			hss.re = re
+			hss.ss.MixHash(rs)
+			hss.ss.MixHash(re)
 		case "":
 		default:
 			panic("invalid responder premessage")
 		}
 	}
 
-	hss.ss.MixHash(prologue)
-	//TODO(kkl): Implment pre-message mixhashing ("Calls MixHash() once for each public key listed..." from section 5.3)
 	hss.mp = handshakePattern.MessagePattern
 	return
 
