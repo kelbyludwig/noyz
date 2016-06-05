@@ -30,7 +30,8 @@ func (s SHA256Function) BlockLen() int {
 
 func (s SHA256Function) HMAC(key, data []byte) []byte {
 	h := hmac.New(sha256.New, key)
-	mac := h.Sum(data)
+	h.Write(data)
+	mac := h.Sum(nil)
 	return mac
 }
 
