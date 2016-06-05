@@ -56,7 +56,7 @@ func (cs CipherState) HasKey() bool {
 func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 	if cs.HasKey() {
 		if cs.n == NONCEMAX {
-			//TODO(kkl): better error handling here.
+			//TODO(kkl): This could be better handled. Instead of a panic, the connection should be killed.
 			panic("nonce max hit!")
 		}
 		nb := make([]byte, 8)
@@ -71,7 +71,7 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 		// and state machine. In other words, assuming the implementation is sound
 		// the only time this will happen is prior to *any* DH operations.
 
-		// TODO(kkl): I think this comment is an interesting
+		// NOTE(kkl): I think this comment is an interesting
 		// assumption. Might be worth testing.
 
 		return plaintext
@@ -84,7 +84,7 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 func (cs *CipherState) DecryptWithAD(ad, ciphertext []byte) ([]byte, error) {
 	if cs.HasKey() {
 		if cs.n == NONCEMAX {
-			//TODO(kkl): better error handling here.
+			//TODO(kkl): This could be better handled. Instead of a panic, the connection should be killed.
 			panic("nonce max hit!")
 		}
 		nb := make([]byte, 8)
@@ -109,7 +109,8 @@ type SymmetricState struct {
 	h []byte
 }
 
-//TODO(kkl): Document.
+// InitializeSymmetric takes a protocol name as input and initializes the
+// SymmetricState struct.
 func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 
 	ss.cs = CipherState{}
@@ -156,13 +157,13 @@ func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 
 	ss.ck = make([]byte, ss.cs.hf.HashLen())
 	copy(ss.ck, ss.h)
-
 }
 
 // MixKey updates the CipherState keys with the input bytes.
 func (ss *SymmetricState) MixKey(inputKeyMaterial []byte) {
 	ck, tempK := ss.cs.hf.HKDF(ss.ck, inputKeyMaterial)
 	ss.ck = ck
+
 	if ss.cs.hf.HashLen() == 64 {
 		tempK = tempK[:32]
 	}
@@ -197,7 +198,8 @@ func (ss *SymmetricState) DecryptAndHash(ciphertext []byte) (plaintext []byte) {
 	return plaintext
 }
 
-//TODO(kkl): Document.
+// Split is called once a Noise handshake is completed. It returns sending and
+// recieving CipherState structs for sending encrypted messages.
 func (ss *SymmetricState) Split() (ss1, ss2 CipherState) {
 	tempK1, tempK2 := ss.cs.hf.HKDF(ss.ck, []byte{})
 
@@ -212,14 +214,21 @@ func (ss *SymmetricState) Split() (ss1, ss2 CipherState) {
 	return
 }
 
-//TODO(kkl): Document.
+// HandshakePattern describes how an initiator and a responder will negotiate a
+// shared secret.
 type HandshakePattern struct {
-	InitiatorPreMessages []string
-	ResponderPreMessages []string
-	MessagePattern       []string
+	// initiatorPreMessages are keys that are known to an initiator prior
+	// to a handshake. Can be empty.
+	initiatorPreMessages []string
+	// responderPreMessages are keys that are known to an responder prior
+	// to a handshake. Can be empty.
+	responderPreMessages []string
+	// messagePattern describes the messages that are exchanged between the
+	// initiator and the responder to determine a shared secret.
+	messagePattern []string
 }
 
-//TODO(kkl): Document.
+// HandshakeState keeps track of the state during a Noise handshake.
 type HandshakeState struct {
 	// ss maintains the state for encryption and decryption.
 	ss SymmetricState
@@ -235,7 +244,7 @@ type HandshakeState struct {
 	mp []string
 }
 
-//TODO(kkl): Document.
+// Initialize initializes a HandshakeState struct.
 func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
 
 	//TODO(kkl): Can premessage patterns have dhxy operations in them? If so, account for them here.
@@ -305,15 +314,12 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 //TODO(kkl): Document this!
 func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (c1, c2 CipherState) {
 
-	if len(hss.mp) == 0 {
-		return hss.ss.Split()
+	var tokens []string
+	if len(hss.mp) != 0 {
+		mp := hss.mp[0]
+		hss.mp = hss.mp[1:]
+		tokens = strings.Split(mp, ",")
 	}
-
-	mp := hss.mp[0]
-	hss.mp = hss.mp[1:]
-
-	tokens := strings.Split(mp, ",")
-
 	for _, t := range tokens {
 		switch t {
 		case "s":
@@ -339,21 +345,21 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 	}
 
 	*messageBuffer = append(*messageBuffer, hss.ss.EncryptAndHash(payload)...)
+	if len(hss.mp) == 0 {
+		return hss.ss.Split()
+	}
 	return
 }
 
 //TODO(kkl): Document this!
 func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c1, c2 CipherState) {
 
-	if len(hss.mp) == 0 {
-		return hss.ss.Split()
+	var tokens []string
+	if len(hss.mp) != 0 {
+		mp := hss.mp[0]
+		hss.mp = hss.mp[1:]
+		tokens = strings.Split(mp, ",")
 	}
-
-	mp := hss.mp[0]
-	hss.mp = hss.mp[1:]
-
-	tokens := strings.Split(mp, ",")
-
 	for _, t := range tokens {
 		switch t {
 		case "s":
@@ -386,8 +392,10 @@ func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c
 		}
 	}
 
-	_ = "breakpoint"
 	*payloadBuffer = append(*payloadBuffer, hss.ss.DecryptAndHash(message)...)
+	if len(hss.mp) == 0 {
+		return hss.ss.Split()
+	}
 	return
 
 }
