@@ -226,6 +226,17 @@ type HandshakePattern struct {
 	// MessagePattern describes the messages that are exchanged between the
 	// initiator and the responder to determine a shared secret.
 	MessagePattern []string
+	// DiffieHellman is the string representation of the Diffie-Hellman
+	// function used.
+	DiffieHellman string
+	// HashFunction is the string representation of the hash function used.
+	HashFunction string
+	// SymmetricCipher is the string representation of the symmetric cipher
+	// used.
+	SymmetricCipher string
+	// HandshakePatternName is the string representation of handshake
+	// pattern name
+	HandshakePatternName string
 }
 
 // HandshakeState keeps track of the state during a Noise handshake.
@@ -247,10 +258,9 @@ type HandshakeState struct {
 // Initialize initializes a HandshakeState struct.
 func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
 
-	//TODO(kkl): Hardcoding this for now!
-	protocolName := []byte("Noise_NN_25519_AESGCM_SHA256")
+	protocolName := "Noise_" + handshakePattern.HandshakePatternName + "_" + handshakePattern.DiffieHellman + "_" + handshakePattern.SymmetricCipher + "_" + handshakePattern.HashFunction
 	hss.ss = SymmetricState{}
-	hss.ss.InitializeSymmetric(protocolName)
+	hss.ss.InitializeSymmetric([]byte(protocolName))
 	hss.ss.MixHash(prologue)
 
 	for _, ipm := range handshakePattern.initiatorPreMessages {

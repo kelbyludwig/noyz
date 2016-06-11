@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	hp := pattern.NoiseNN()
+	hp := pattern.Initialize("NN", "25519", "SHA256", "AESGCM")
 
 	emptyPublicKey := dh.PublicKey{}
 	emptyKeyPair := dh.KeyPair{}
