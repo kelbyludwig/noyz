@@ -10,7 +10,7 @@ func noiseNN() state.HandshakePattern {
 	return hp
 }
 
-func Initialize(handshakePatternName, diffieHellman, hashFunction, symmetricCipher string) (handshakePattern state.HandshakePattern) {
+func Initialize(handshakePatternName, diffieHellman, hashFunction, cipher string) (handshakePattern state.HandshakePattern) {
 
 	switch handshakePatternName {
 	case "NN":
@@ -22,6 +22,6 @@ func Initialize(handshakePatternName, diffieHellman, hashFunction, symmetricCiph
 
 	handshakePattern.DiffieHellman = diffieHellman
 	handshakePattern.HashFunction = hashFunction
-	handshakePattern.SymmetricCipher = symmetricCipher
+	handshakePattern.SymmetricCipher = cipher
 	return handshakePattern
 }

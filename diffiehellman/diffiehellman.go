@@ -19,6 +19,7 @@ type DHFunction interface {
 	GenerateKeyPair() (keyPair KeyPair)
 	DH(keyPair KeyPair, publicKey PublicKey) SharedPoint
 	DHLen() int
+	FixedKeyPair(privateKey []byte) (keypair KeyPair) //TODO(kkl): I don't love this being included in the interface. This was a quick fix for now until I can find a spot that makes more sense.
 }
 
 type Curve25519Function struct{}
@@ -59,4 +60,16 @@ func (c Curve25519Function) DH(keyPair KeyPair, publicKey PublicKey) SharedPoint
 
 func (c Curve25519Function) DHLen() int {
 	return 32
+}
+
+// FixedKeyPair is a low-level helper method for defining a DH Keypair with a
+// known private key. In most cases, GenerateKeyPair() should be used instead.
+func (c Curve25519Function) FixedKeyPair(priv []byte) (keyPair KeyPair) {
+	var privateKey, publicKey [32]byte
+	copy(privateKey[:], priv)
+	curve25519.ScalarBaseMult(&publicKey, &privateKey)
+	keyPair.Private = privateKey[:]
+	keyPair.Public = publicKey[:]
+	keyPair.Initialized = true
+	return
 }

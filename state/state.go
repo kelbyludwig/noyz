@@ -2,9 +2,11 @@ package state
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"github.com/kelbyludwig/noyz/cipher"
 	dh "github.com/kelbyludwig/noyz/diffiehellman"
 	"github.com/kelbyludwig/noyz/hash"
+	"log"
 	"strings"
 )
 
@@ -241,7 +243,7 @@ type HandshakePattern struct {
 
 // HandshakeState keeps track of the state during a Noise handshake.
 type HandshakeState struct {
-	// ss maintains the state for encryption and decryption.
+	// ss maintains the state for encryption and decryption
 	ss SymmetricState
 	// s is the local static key pair
 	s dh.KeyPair
@@ -253,17 +255,35 @@ type HandshakeState struct {
 	re dh.PublicKey
 	// mp is the remaining portions of the handshake's pattern
 	mp []string
+	// testing signifies if the current struct is used for testing purposes
+	testing bool
+	ts      string
+	te      string
+}
+
+// FixKeysForTesting will fix the inputs as private keys for the
+// HandshakeState. This is used for testing purposes and should not be used
+// otherwise.
+func (hss *HandshakeState) FixKeysForTesting(ts, te string) {
+	hss.testing = true
+	hss.ts = ts
+	hss.te = te
 }
 
 // Initialize initializes a HandshakeState struct.
 func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
 
 	protocolName := "Noise_" + handshakePattern.HandshakePatternName + "_" + handshakePattern.DiffieHellman + "_" + handshakePattern.SymmetricCipher + "_" + handshakePattern.HashFunction
+	log.Printf("Initializing HandshakeState with protocol %v\n", protocolName)
 	hss.ss = SymmetricState{}
 	hss.ss.InitializeSymmetric([]byte(protocolName))
+	log.Printf("Mixing in the prologue %x\n", prologue)
 	hss.ss.MixHash(prologue)
+	nullKey := make([]byte, hss.ss.cs.dh.DHLen())
 
+	log.Printf("Mixing in premessages:\n")
 	for _, ipm := range handshakePattern.initiatorPreMessages {
+		log.Printf("Mixing in %v\n", ipm)
 		switch ipm {
 		case "s":
 			if !s.Initialized {
@@ -291,7 +311,6 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 		}
 	}
 
-	nullKey := make([]byte, hss.ss.cs.dh.DHLen())
 	for _, rpm := range handshakePattern.responderPreMessages {
 		switch rpm {
 		case "s":
@@ -335,16 +354,28 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 		hss.mp = hss.mp[1:]
 		tokens = strings.Split(mp, ",")
 	}
+
+	decode := func(in string) []byte {
+		b, _ := hex.DecodeString(in)
+		return b
+	}
+
 	for _, t := range tokens {
 		switch t {
 		case "s":
+			if hss.testing {
+				hss.s = hss.ss.cs.dh.FixedKeyPair(decode(hss.ts))
+			}
 			ct := hss.ss.EncryptAndHash(hss.s.Public)
 			*messageBuffer = append(*messageBuffer, ct...)
 		case "e":
-			e := hss.ss.cs.dh.GenerateKeyPair()
-			hss.e = e
-			*messageBuffer = append(*messageBuffer, e.Public...)
-			hss.ss.MixHash(e.Public)
+			if hss.testing {
+				hss.e = hss.ss.cs.dh.FixedKeyPair(decode(hss.te))
+			} else {
+				hss.e = hss.ss.cs.dh.GenerateKeyPair()
+			}
+			*messageBuffer = append(*messageBuffer, hss.e.Public...)
+			hss.ss.MixHash(hss.e.Public)
 		case "dhee":
 			o := hss.ss.cs.dh.DH(hss.e, hss.re)
 			hss.ss.MixKey(o)
