@@ -1,7 +1,6 @@
 package state
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"github.com/kelbyludwig/noyz/cipher"
 	dh "github.com/kelbyludwig/noyz/diffiehellman"
@@ -61,9 +60,8 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 			//TODO(kkl): This could be better handled. Instead of a panic, the connection should be killed.
 			panic("nonce max hit!")
 		}
-		nb := make([]byte, 8)
-		binary.PutUvarint(nb, cs.n)
-		ct := cs.c.Encrypt(cs.k, nb, ad, plaintext)
+		cs.n = cs.n + 1
+		ct := cs.c.Encrypt(cs.n, cs.k, ad, plaintext)
 		return ct
 	} else {
 		// EncryptWithAD assumes that the CipherState will be
@@ -89,9 +87,8 @@ func (cs *CipherState) DecryptWithAD(ad, ciphertext []byte) ([]byte, error) {
 			//TODO(kkl): This could be better handled. Instead of a panic, the connection should be killed.
 			panic("nonce max hit!")
 		}
-		nb := make([]byte, 8)
-		binary.PutUvarint(nb, cs.n)
-		plaintext, err := cs.c.Decrypt(cs.k, nb, ad, ciphertext)
+		cs.n = cs.n + 1
+		plaintext, err := cs.c.Decrypt(cs.n, cs.k, ad, ciphertext)
 		return plaintext, err
 	} else {
 		return ciphertext, nil
@@ -274,16 +271,12 @@ func (hss *HandshakeState) FixKeysForTesting(ts, te string) {
 func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
 
 	protocolName := "Noise_" + handshakePattern.HandshakePatternName + "_" + handshakePattern.DiffieHellman + "_" + handshakePattern.SymmetricCipher + "_" + handshakePattern.HashFunction
-	log.Printf("Initializing HandshakeState with protocol %v\n", protocolName)
 	hss.ss = SymmetricState{}
 	hss.ss.InitializeSymmetric([]byte(protocolName))
-	log.Printf("Mixing in the prologue %x\n", prologue)
 	hss.ss.MixHash(prologue)
 	nullKey := make([]byte, hss.ss.cs.dh.DHLen())
 
-	log.Printf("Mixing in premessages:\n")
 	for _, ipm := range handshakePattern.initiatorPreMessages {
-		log.Printf("Mixing in %v\n", ipm)
 		switch ipm {
 		case "s":
 			if !s.Initialized {
@@ -355,6 +348,8 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 		tokens = strings.Split(mp, ",")
 	}
 
+	log.Printf("WriteMessage: HandshakeState's current tokens %v\n", tokens)
+
 	decode := func(in string) []byte {
 		b, _ := hex.DecodeString(in)
 		return b
@@ -366,7 +361,9 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 			if hss.testing {
 				hss.s = hss.ss.cs.dh.FixedKeyPair(decode(hss.ts))
 			}
+			log.Printf("WriteMessage: token 's' encrypting the static public key %x\n", hss.s.Public)
 			ct := hss.ss.EncryptAndHash(hss.s.Public)
+			log.Printf("WriteMessage: token 's' appending the encrypted static public key %x\n", ct)
 			*messageBuffer = append(*messageBuffer, ct...)
 		case "e":
 			if hss.testing {
@@ -375,22 +372,33 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 				hss.e = hss.ss.cs.dh.GenerateKeyPair()
 			}
 			*messageBuffer = append(*messageBuffer, hss.e.Public...)
+			log.Printf("WriteMessage: token 'e' appending the plaintext public key  %x\n", hss.e.Public)
 			hss.ss.MixHash(hss.e.Public)
 		case "dhee":
 			o := hss.ss.cs.dh.DH(hss.e, hss.re)
+			log.Printf("WriteMessage: token 'dhee' mixing in the shared key %x\n", o)
 			hss.ss.MixKey(o)
 		case "dhes":
-			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.rs))
+			o := hss.ss.cs.dh.DH(hss.e, hss.rs)
+			log.Printf("WriteMessage: token 'dhes' mixing in the shared key %x\n", o)
+			hss.ss.MixKey(o)
 		case "dhse":
-			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.s, hss.re))
+			o := hss.ss.cs.dh.DH(hss.s, hss.re)
+			log.Printf("WriteMessage: token 'dhse' mixing in the shared key %x\n", o)
+			hss.ss.MixKey(o)
 		case "dhss":
-			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.s, hss.rs))
+			o := hss.ss.cs.dh.DH(hss.s, hss.rs)
+			log.Printf("WriteMessage: token 'dhss' mixing in the shared key %x\n", o)
+			hss.ss.MixKey(o)
 		default:
 			panic("invalid message pattern token")
 		}
 	}
 
-	*messageBuffer = append(*messageBuffer, hss.ss.EncryptAndHash(payload)...)
+	p := hss.ss.EncryptAndHash(payload)
+	log.Printf("WriteMessage: encrypting the payload %x\n", payload)
+	log.Printf("WriteMessage: appending the encrypted payload %x\n", p)
+	*messageBuffer = append(*messageBuffer, p...)
 	if len(hss.mp) == 0 {
 		return hss.ss.Split()
 	}
