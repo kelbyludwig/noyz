@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	dh "github.com/kelbyludwig/noyz/diffiehellman"
 	"github.com/kelbyludwig/noyz/pattern"
 	"github.com/kelbyludwig/noyz/state"
@@ -82,10 +83,33 @@ func RunTestVector(v Vector) error {
 	resp.FixKeysForTesting(v.RespStatic, v.RespEphemeral)
 
 	var messageBufferInit []byte
-	//var payloadBufferInit []byte
+	var payloadBufferInit []byte
 
-	init.WriteMessage(decode(v.Messages[0].Payload), &messageBufferInit)
-	log.Printf("mb: %v == %x\n", v.Messages[0].Ciphertext, messageBufferInit)
+	for i, x := range v.Messages {
+		if i%2 == 0 {
+			init.WriteMessage(decode(x.Payload), &messageBufferInit)
+			result := fmt.Sprintf("%x", messageBufferInit)
+			if result != x.Ciphertext {
+				return fmt.Errorf("vector failed on message %v: initiators message did not match expected ciphertext", i)
+			}
+			resp.ReadMessage(messageBufferInit, &payloadBufferInit)
+			result = fmt.Sprintf("%x", payloadBufferInit)
+			if result != x.Payload {
+				return fmt.Errorf("vector failed on message %v: responders payload did not match expected payload", i)
+			}
+		} else {
+			resp.WriteMessage(decode(x.Payload), &messageBufferInit)
+			result := fmt.Sprintf("%x", messageBufferInit)
+			if result != x.Ciphertext {
+				return fmt.Errorf("vector failed on message %v: responders message did not match expected ciphertext", i)
+			}
+			init.ReadMessage(messageBufferInit, &payloadBufferInit)
+			result = fmt.Sprintf("%x", payloadBufferInit)
+			if result != x.Payload {
+				return fmt.Errorf("vector failed on message %v: initiators payload did not match expected payload", i)
+			}
+		}
+	}
 	return nil
 }
 
