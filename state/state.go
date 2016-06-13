@@ -60,8 +60,8 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 			//TODO(kkl): This could be better handled. Instead of a panic, the connection should be killed.
 			panic("nonce max hit!")
 		}
-		cs.n = cs.n + 1
 		ct := cs.c.Encrypt(cs.n, cs.k, ad, plaintext)
+		cs.n = cs.n + 1
 		return ct
 	} else {
 		// EncryptWithAD assumes that the CipherState will be
@@ -87,8 +87,8 @@ func (cs *CipherState) DecryptWithAD(ad, ciphertext []byte) ([]byte, error) {
 			//TODO(kkl): This could be better handled. Instead of a panic, the connection should be killed.
 			panic("nonce max hit!")
 		}
-		cs.n = cs.n + 1
 		plaintext, err := cs.c.Decrypt(cs.n, cs.k, ad, ciphertext)
+		cs.n = cs.n + 1
 		return plaintext, err
 	} else {
 		return ciphertext, nil
@@ -276,26 +276,27 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 	hss.ss.MixHash(prologue)
 	nullKey := make([]byte, hss.ss.cs.dh.DHLen())
 
+	hss.s = s
+	hss.e = e
+	hss.rs = rs
+	hss.re = re
+
 	for _, ipm := range handshakePattern.initiatorPreMessages {
 		switch ipm {
 		case "s":
 			if !s.Initialized {
 				panic("initiator static key not supplied for premessage")
 			}
-			hss.s = s
 			hss.ss.MixHash(s.Public)
 		case "e":
 			if !e.Initialized {
 				panic("initiator static key not supplied for premessage")
 			}
-			hss.e = e
 			hss.ss.MixHash(e.Public)
 		case "s,e":
 			if !e.Initialized || !s.Initialized {
 				panic("initiator static or ephemeral key not supplied for premessage")
 			}
-			hss.s = s
-			hss.e = e
 			hss.ss.MixHash(s.Public)
 			hss.ss.MixHash(e.Public)
 		case "":
