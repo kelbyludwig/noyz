@@ -5,7 +5,6 @@ import (
 	"github.com/kelbyludwig/noyz/cipher"
 	dh "github.com/kelbyludwig/noyz/diffiehellman"
 	"github.com/kelbyludwig/noyz/hash"
-	"log"
 	"strings"
 )
 
@@ -33,13 +32,6 @@ type CipherState struct {
 	dh dh.DHFunction
 	// hf is the interface that implements the hash-related methods.
 	hf hash.HashFunction
-}
-
-// IsInitialized will return true if the CipherState has been initialized and
-// false otherwise. A CipherState is typically initialized after a handshake is
-// complete and Split() is called.
-func (cs CipherState) IsInitialized() bool {
-	return cs.initialized
 }
 
 // InitializeKey initializes a CipherState struct
@@ -370,8 +362,6 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 		panic("the HandshakeState has no more tokens left in its handshake")
 	}
 
-	log.Printf("WriteMessage: HandshakeState's current tokens %v\n", tokens)
-
 	decode := func(in string) []byte {
 		b, _ := hex.DecodeString(in)
 		return b
@@ -383,9 +373,7 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 			if hss.testing {
 				hss.s = hss.ss.cs.dh.FixedKeyPair(decode(hss.ts))
 			}
-			log.Printf("WriteMessage: token 's' encrypting the static public key %x\n", hss.s.Public)
 			ct := hss.ss.EncryptAndHash(hss.s.Public)
-			log.Printf("WriteMessage: token 's' appending the encrypted static public key %x\n", ct)
 			*messageBuffer = append(*messageBuffer, ct...)
 		case "e":
 			if hss.testing {
@@ -394,23 +382,18 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 				hss.e = hss.ss.cs.dh.GenerateKeyPair()
 			}
 			*messageBuffer = append(*messageBuffer, hss.e.Public...)
-			log.Printf("WriteMessage: token 'e' appending the plaintext public key  %x\n", hss.e.Public)
 			hss.ss.MixHash(hss.e.Public)
 		case "dhee":
 			o := hss.ss.cs.dh.DH(hss.e, hss.re)
-			log.Printf("WriteMessage: token 'dhee' mixing in the shared key %x\n", o)
 			hss.ss.MixKey(o)
 		case "dhes":
 			o := hss.ss.cs.dh.DH(hss.e, hss.rs)
-			log.Printf("WriteMessage: token 'dhes' mixing in the shared key %x\n", o)
 			hss.ss.MixKey(o)
 		case "dhse":
 			o := hss.ss.cs.dh.DH(hss.s, hss.re)
-			log.Printf("WriteMessage: token 'dhse' mixing in the shared key %x\n", o)
 			hss.ss.MixKey(o)
 		case "dhss":
 			o := hss.ss.cs.dh.DH(hss.s, hss.rs)
-			log.Printf("WriteMessage: token 'dhss' mixing in the shared key %x\n", o)
 			hss.ss.MixKey(o)
 		default:
 			panic("invalid message pattern token")
@@ -418,8 +401,6 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 	}
 
 	p := hss.ss.EncryptAndHash(payload)
-	log.Printf("WriteMessage: encrypting the payload %x\n", payload)
-	log.Printf("WriteMessage: appending the encrypted payload %x\n", p)
 	*messageBuffer = append(*messageBuffer, p...)
 	if len(hss.mp) == 0 {
 		return hss.ss.Split()
