@@ -82,29 +82,93 @@ func RunTestVector(v Vector) error {
 	resp.Initialize(hp, false, decode(v.RespPrologue), emptyKeyPair, emptyKeyPair, emptyPublicKey, emptyPublicKey)
 	resp.FixKeysForTesting(v.RespStatic, v.RespEphemeral)
 
-	var messageBufferInit []byte
-	var payloadBufferInit []byte
-
+	var iSender, iRecvr, rSender, rRecvr state.CipherState
 	for i, x := range v.Messages {
+		var messageBufferInit []byte
+		var payloadBufferInit []byte
+
+		// If this statement is true, the handshake should be complete.
+		if iSender.IsInitialized() && iRecvr.IsInitialized() && rSender.IsInitialized() && rRecvr.IsInitialized() {
+			if i%2 == 0 {
+				ciphertext := iSender.EncryptWithAD([]byte{}, decode(x.Payload))
+				result := fmt.Sprintf("%x", ciphertext)
+				log.Printf("initiator result   %v\n", result)
+				log.Printf("initiator expected %v\n", x.Ciphertext)
+				if result != x.Ciphertext {
+					return fmt.Errorf("vector failed on message %v: initiators symmetric encryption did not match expected ciphertext", i)
+				}
+
+				payload, err := rRecvr.DecryptWithAD([]byte{}, ciphertext)
+				result = fmt.Sprintf("%x", payload)
+				log.Printf("responder result   %v\n", result)
+				log.Printf("responder expected %v\n", x.Payload)
+				if err != nil {
+					return fmt.Errorf("vector failed on message %v: responder decryption had an authentication failure", i)
+				}
+				if result != x.Payload {
+					return fmt.Errorf("vector failed on message %v: responders symmetric decryption did not match expected payload", i)
+				}
+
+			} else {
+
+				ciphertext := rSender.EncryptWithAD([]byte{}, decode(x.Payload))
+				result := fmt.Sprintf("%x", ciphertext)
+				log.Printf("responder result   %v\n", result)
+				log.Printf("responder expected %v\n", x.Ciphertext)
+				if result != x.Ciphertext {
+					return fmt.Errorf("vector failed on message %v: responder symmetric encryption did not match expected ciphertext", i)
+				}
+
+				payload, err := iRecvr.DecryptWithAD([]byte{}, ciphertext)
+				result = fmt.Sprintf("%x", payload)
+				log.Printf("initiator result   %v\n", result)
+				log.Printf("initiator expected %v\n", x.Payload)
+				if err != nil {
+					return fmt.Errorf("vector failed on message %v: initiator decryption had an authentication failure", i)
+				}
+				if result != x.Payload {
+					return fmt.Errorf("vector failed on message %v: initiator symmetric decryption did not match expected payload", i)
+				}
+
+			}
+			continue
+		}
+
 		if i%2 == 0 {
-			init.WriteMessage(decode(x.Payload), &messageBufferInit)
+			iSender, iRecvr = init.WriteMessage(decode(x.Payload), &messageBufferInit)
 			result := fmt.Sprintf("%x", messageBufferInit)
+			log.Printf("iSender %v\n", iSender)
+			log.Printf("iRecvr %v\n", iRecvr)
+			log.Printf("initiator ciphertext %v\n", result)
+			log.Printf("initiator expected   %v\n", x.Ciphertext)
 			if result != x.Ciphertext {
 				return fmt.Errorf("vector failed on message %v: initiators message did not match expected ciphertext", i)
 			}
-			resp.ReadMessage(messageBufferInit, &payloadBufferInit)
+			rSender, rRecvr = resp.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
+			log.Printf("rSender %v\n", rSender)
+			log.Printf("rRecvr %v\n", rRecvr)
+			log.Printf("responder payload    %v\n", result)
+			log.Printf("responder expected   %v\n", x.Payload)
 			if result != x.Payload {
 				return fmt.Errorf("vector failed on message %v: responders payload did not match expected payload", i)
 			}
 		} else {
-			resp.WriteMessage(decode(x.Payload), &messageBufferInit)
+			iSender, iRecvr = resp.WriteMessage(decode(x.Payload), &messageBufferInit)
 			result := fmt.Sprintf("%x", messageBufferInit)
+			log.Printf("iSender %v\n", iSender)
+			log.Printf("iRecvr %v\n", iRecvr)
+			log.Printf("responder ciphertext %v\n", result)
+			log.Printf("responder expected   %v\n", x.Ciphertext)
 			if result != x.Ciphertext {
 				return fmt.Errorf("vector failed on message %v: responders message did not match expected ciphertext", i)
 			}
-			init.ReadMessage(messageBufferInit, &payloadBufferInit)
+			rSender, rRecvr = init.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
+			log.Printf("rSender %v\n", rSender)
+			log.Printf("rRecvr %v\n", rRecvr)
+			log.Printf("initiator payload    %v\n", result)
+			log.Printf("initiator expected   %v\n", x.Payload)
 			if result != x.Payload {
 				return fmt.Errorf("vector failed on message %v: initiators payload did not match expected payload", i)
 			}
@@ -115,5 +179,7 @@ func RunTestVector(v Vector) error {
 
 func TestNoiseNN(t *testing.T) {
 	nn := vectors.TestVectors[8]
-	RunTestVector(nn)
+	if err := RunTestVector(nn); err != nil {
+		t.Errorf("test vector 8 failed: %v\n", err)
+	}
 }

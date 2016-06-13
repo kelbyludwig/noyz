@@ -35,6 +35,13 @@ type CipherState struct {
 	hf hash.HashFunction
 }
 
+// IsInitialized will return true if the CipherState has been initialized and
+// false otherwise. A CipherState is typically initialized after a handshake is
+// complete and Split() is called.
+func (cs CipherState) IsInitialized() bool {
+	return cs.initialized
+}
+
 // InitializeKey initializes a CipherState struct
 // and sets the starting nonce and key values.
 func (cs *CipherState) InitializeKey(key []byte) {
@@ -199,17 +206,28 @@ func (ss *SymmetricState) DecryptAndHash(ciphertext []byte) (plaintext []byte) {
 
 // Split is called once a Noise handshake is completed. It returns sending and
 // recieving CipherState structs for sending encrypted messages.
-func (ss *SymmetricState) Split() (ss1, ss2 CipherState) {
+func (ss *SymmetricState) Split() (cs1, cs2 CipherState) {
 	tempK1, tempK2 := ss.cs.hf.HKDF(ss.ck, []byte{})
 
 	if ss.cs.hf.HashLen() == 64 {
 		tempK1 = tempK1[:32]
 		tempK2 = tempK2[:32]
 	}
-	ss1 = CipherState{}
-	ss2 = CipherState{}
-	ss1.InitializeKey(tempK1)
-	ss2.InitializeKey(tempK2)
+	cs1 = CipherState{}
+	cs2 = CipherState{}
+
+	cs1.InitializeKey(tempK1)
+	cs2.InitializeKey(tempK2)
+
+	cs1.c = ss.cs.c
+	cs2.c = ss.cs.c
+
+	cs1.dh = ss.cs.dh
+	cs2.dh = ss.cs.dh
+
+	cs1.hf = ss.cs.hf
+	cs2.hf = ss.cs.hf
+
 	return
 }
 
@@ -239,6 +257,7 @@ type HandshakePattern struct {
 }
 
 // HandshakeState keeps track of the state during a Noise handshake.
+// TODO(kkl): Add a variable to keep track of whos turn it is for the handshake.
 type HandshakeState struct {
 	// ss maintains the state for encryption and decryption
 	ss SymmetricState
@@ -347,6 +366,8 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 		mp := hss.mp[0]
 		hss.mp = hss.mp[1:]
 		tokens = strings.Split(mp, ",")
+	} else {
+		panic("the HandshakeState has no more tokens left in its handshake")
 	}
 
 	log.Printf("WriteMessage: HandshakeState's current tokens %v\n", tokens)
@@ -415,6 +436,8 @@ func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c
 		mp := hss.mp[0]
 		hss.mp = hss.mp[1:]
 		tokens = strings.Split(mp, ",")
+	} else {
+		panic("the HandshakeState has no more tokens left in its handshake")
 	}
 	for _, t := range tokens {
 		switch t {
