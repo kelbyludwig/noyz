@@ -61,34 +61,44 @@ func init() {
 	}
 }
 
-func RunTestVector(v Vector) error {
+func decode(in string) []byte {
+	b, _ := hex.DecodeString(in)
+	return b
+}
 
-	decode := func(in string) []byte {
-		b, _ := hex.DecodeString(in)
-		return b
-	}
-
+// createEmptyHandshaker is a test helper that creates either an initiator or
+// responder with an hardcoded private DH key.
+func createEmptyHandshaker(v Vector, hp pattern.HandshakePattern, initiator bool) (hs HandshakeState) {
 	emptyPublicKey := dh.PublicKey{}
 	emptyKeyPair := dh.KeyPair{}
 
+	if initiator {
+		hs.Initialize(hp, true, decode(v.InitPrologue), emptyKeyPair, emptyKeyPair, emptyPublicKey, emptyPublicKey)
+		hs.FixKeysForTesting(v.InitStatic, v.InitEphemeral)
+	} else {
+		hs.Initialize(hp, false, decode(v.RespPrologue), emptyKeyPair, emptyKeyPair, emptyPublicKey, emptyPublicKey)
+		hs.FixKeysForTesting(v.RespStatic, v.RespEphemeral)
+	}
+	return hs
+}
+
+func RunTestVector(v Vector) error {
+
 	hp := pattern.Initialize(v.Pattern, v.DH, v.Hash, v.Cipher)
 
-	init := HandshakeState{}
-	init.Initialize(hp, true, decode(v.InitPrologue), emptyKeyPair, emptyKeyPair, emptyPublicKey, emptyPublicKey)
-	init.FixKeysForTesting(v.InitStatic, v.InitEphemeral)
-
-	resp := HandshakeState{}
-	resp.Initialize(hp, false, decode(v.RespPrologue), emptyKeyPair, emptyKeyPair, emptyPublicKey, emptyPublicKey)
-	resp.FixKeysForTesting(v.RespStatic, v.RespEphemeral)
+	init := createEmptyHandshaker(v, hp, true)
+	resp := createEmptyHandshaker(v, hp, false)
 
 	var ic1, ic2, rc1, rc2 CipherState
 	for i, x := range v.Messages {
 		var messageBufferInit []byte
 		var payloadBufferInit []byte
 
-		// If this statement is true, the handshake should be complete.
+		// If this statement is true, the handshake should be complete
+		// and we can just use symmetric state.
 		if ic1.HasKey() && ic2.HasKey() && rc1.HasKey() && rc2.HasKey() {
 			if i%2 == 0 {
+				// It is the initiators turn
 				ciphertext := ic1.EncryptWithAD([]byte{}, decode(x.Payload))
 				result := fmt.Sprintf("%x", ciphertext)
 				if result != x.Ciphertext {
@@ -105,7 +115,7 @@ func RunTestVector(v Vector) error {
 				}
 
 			} else {
-
+				// It is the responders turn
 				ciphertext := rc2.EncryptWithAD([]byte{}, decode(x.Payload))
 				result := fmt.Sprintf("%x", ciphertext)
 				if result != x.Ciphertext {
@@ -131,17 +141,20 @@ func RunTestVector(v Vector) error {
 			if result != x.Ciphertext {
 				return fmt.Errorf("vector failed on message %v: initiators message did not match expected ciphertext", i)
 			}
+
 			rc1, rc2 = resp.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
 			if result != x.Payload {
 				return fmt.Errorf("vector failed on message %v: responders payload did not match expected payload", i)
 			}
+
 		} else {
 			ic1, ic2 = resp.WriteMessage(decode(x.Payload), &messageBufferInit)
 			result := fmt.Sprintf("%x", messageBufferInit)
 			if result != x.Ciphertext {
 				return fmt.Errorf("vector failed on message %v: responders message did not match expected ciphertext", i)
 			}
+
 			rc1, rc2 = init.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
 			if result != x.Payload {
