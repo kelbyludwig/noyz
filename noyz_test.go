@@ -8,7 +8,6 @@ import (
 	"github.com/kelbyludwig/noyz/pattern"
 	"github.com/kelbyludwig/noyz/state"
 	"io/ioutil"
-	"log"
 	"os"
 	"testing"
 )
@@ -71,7 +70,6 @@ func RunTestVector(v Vector) error {
 	emptyPublicKey := dh.PublicKey{}
 	emptyKeyPair := dh.KeyPair{}
 
-	log.Printf("Initialiizing Noise_%v_%v_%v_%v\n", v.Pattern, v.DH, v.Hash, v.Cipher)
 	hp := pattern.Initialize(v.Pattern, v.DH, v.Hash, v.Cipher)
 
 	init := state.HandshakeState{}
@@ -92,16 +90,12 @@ func RunTestVector(v Vector) error {
 			if i%2 == 0 {
 				ciphertext := ic1.EncryptWithAD([]byte{}, decode(x.Payload))
 				result := fmt.Sprintf("%x", ciphertext)
-				log.Printf("initiator result   %v\n", result)
-				log.Printf("initiator expected %v\n", x.Ciphertext)
 				if result != x.Ciphertext {
 					return fmt.Errorf("vector failed on message %v: initiators symmetric encryption did not match expected ciphertext", i)
 				}
 
 				payload, err := rc1.DecryptWithAD([]byte{}, ciphertext)
 				result = fmt.Sprintf("%x", payload)
-				log.Printf("responder result   %v\n", result)
-				log.Printf("responder expected %v\n", x.Payload)
 				if err != nil {
 					return fmt.Errorf("vector failed on message %v: responder decryption had an authentication failure", i)
 				}
@@ -113,17 +107,12 @@ func RunTestVector(v Vector) error {
 
 				ciphertext := rc2.EncryptWithAD([]byte{}, decode(x.Payload))
 				result := fmt.Sprintf("%x", ciphertext)
-				log.Printf("responder result   %v\n", result)
-				log.Printf("responder expected %v\n", x.Ciphertext)
-
 				if result != x.Ciphertext {
 					return fmt.Errorf("vector failed on message %v: responder symmetric encryption did not match expected ciphertext", i)
 				}
 
 				payload, err := ic2.DecryptWithAD([]byte{}, ciphertext)
 				result = fmt.Sprintf("%x", payload)
-				log.Printf("initiator result   %v\n", result)
-				log.Printf("initiator expected %v\n", x.Payload)
 				if err != nil {
 					return fmt.Errorf("vector failed on message %v: initiator decryption had an authentication failure", i)
 				}
@@ -138,38 +127,22 @@ func RunTestVector(v Vector) error {
 		if i%2 == 0 {
 			ic1, ic2 = init.WriteMessage(decode(x.Payload), &messageBufferInit)
 			result := fmt.Sprintf("%x", messageBufferInit)
-			log.Printf("ic1 %v\n", ic1)
-			log.Printf("ic2 %v\n", ic2)
-			log.Printf("initiator ciphertext %v\n", result)
-			log.Printf("initiator expected   %v\n", x.Ciphertext)
 			if result != x.Ciphertext {
 				return fmt.Errorf("vector failed on message %v: initiators message did not match expected ciphertext", i)
 			}
 			rc1, rc2 = resp.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
-			log.Printf("rc1 %v\n", rc1)
-			log.Printf("rc2 %v\n", rc2)
-			log.Printf("responder payload    %v\n", result)
-			log.Printf("responder expected   %v\n", x.Payload)
 			if result != x.Payload {
 				return fmt.Errorf("vector failed on message %v: responders payload did not match expected payload", i)
 			}
 		} else {
 			ic1, ic2 = resp.WriteMessage(decode(x.Payload), &messageBufferInit)
 			result := fmt.Sprintf("%x", messageBufferInit)
-			log.Printf("ic1 %v\n", ic1)
-			log.Printf("ic2 %v\n", ic2)
-			log.Printf("responder ciphertext %v\n", result)
-			log.Printf("responder expected   %v\n", x.Ciphertext)
 			if result != x.Ciphertext {
 				return fmt.Errorf("vector failed on message %v: responders message did not match expected ciphertext", i)
 			}
 			rc1, rc2 = init.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
-			log.Printf("rc1 %v\n", rc1)
-			log.Printf("rc2 %v\n", rc2)
-			log.Printf("initiator payload    %v\n", result)
-			log.Printf("initiator expected   %v\n", x.Payload)
 			if result != x.Payload {
 				return fmt.Errorf("vector failed on message %v: initiators payload did not match expected payload", i)
 			}
