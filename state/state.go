@@ -5,6 +5,7 @@ import (
 	"github.com/kelbyludwig/noyz/cipher"
 	dh "github.com/kelbyludwig/noyz/diffiehellman"
 	"github.com/kelbyludwig/noyz/hash"
+	"github.com/kelbyludwig/noyz/pattern"
 	"strings"
 )
 
@@ -223,31 +224,6 @@ func (ss *SymmetricState) Split() (cs1, cs2 CipherState) {
 	return
 }
 
-// HandshakePattern describes how an initiator and a responder will negotiate a
-// shared secret.
-type HandshakePattern struct {
-	// initiatorPreMessages are keys that are known to an initiator prior
-	// to a handshake. Can be empty.
-	initiatorPreMessages []string
-	// responderPreMessages are keys that are known to an responder prior
-	// to a handshake. Can be empty.
-	responderPreMessages []string
-	// MessagePattern describes the messages that are exchanged between the
-	// initiator and the responder to determine a shared secret.
-	MessagePattern []string
-	// DiffieHellman is the string representation of the Diffie-Hellman
-	// function used.
-	DiffieHellman string
-	// HashFunction is the string representation of the hash function used.
-	HashFunction string
-	// SymmetricCipher is the string representation of the symmetric cipher
-	// used.
-	SymmetricCipher string
-	// HandshakePatternName is the string representation of handshake
-	// pattern name
-	HandshakePatternName string
-}
-
 // HandshakeState keeps track of the state during a Noise handshake.
 // TODO(kkl): Add a variable to keep track of whos turn it is for the handshake.
 type HandshakeState struct {
@@ -279,7 +255,7 @@ func (hss *HandshakeState) FixKeysForTesting(ts, te string) {
 }
 
 // Initialize initializes a HandshakeState struct.
-func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
+func (hss *HandshakeState) Initialize(handshakePattern pattern.HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
 
 	protocolName := "Noise_" + handshakePattern.HandshakePatternName + "_" + handshakePattern.DiffieHellman + "_" + handshakePattern.SymmetricCipher + "_" + handshakePattern.HashFunction
 	hss.ss = SymmetricState{}
@@ -292,7 +268,7 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 	hss.rs = rs
 	hss.re = re
 
-	for _, ipm := range handshakePattern.initiatorPreMessages {
+	for _, ipm := range handshakePattern.InitiatorPreMessages {
 		switch ipm {
 		case "s":
 			if !s.Initialized {
@@ -316,7 +292,7 @@ func (hss *HandshakeState) Initialize(handshakePattern HandshakePattern, initiat
 		}
 	}
 
-	for _, rpm := range handshakePattern.responderPreMessages {
+	for _, rpm := range handshakePattern.ResponderPreMessages {
 		switch rpm {
 		case "s":
 			if string(rs) == string(nullKey) {
