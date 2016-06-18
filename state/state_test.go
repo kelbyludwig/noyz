@@ -46,18 +46,15 @@ func init() {
 	file, err := os.Open("cacophony.txt")
 	if err != nil {
 		panic("failed to open test file")
-		return
 	}
 	blob, err := ioutil.ReadAll(file)
 	if err != nil {
 		panic("failed to read the test file")
-		return
 	}
 	vectors = new(Vectors)
 	err = json.Unmarshal(blob, &vectors)
 	if err != nil {
 		panic("failed to unmarshal input file")
-		return
 	}
 }
 
