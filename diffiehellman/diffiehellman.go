@@ -20,6 +20,7 @@ type DHFunction interface {
 	DH(keyPair KeyPair, publicKey PublicKey) SharedPoint
 	DHLen() int
 	FixedKeyPair(privateKey []byte) (keypair KeyPair) //TODO(kkl): I don't love this being included in the interface. This was a quick fix for now until I can find a spot that makes more sense.
+	FixedPublicKey(publicKey []byte) PublicKey
 }
 
 type Curve25519Function struct{}
@@ -72,4 +73,8 @@ func (c Curve25519Function) FixedKeyPair(priv []byte) (keyPair KeyPair) {
 	keyPair.Public = publicKey[:]
 	keyPair.Initialized = true
 	return
+}
+
+func (c Curve25519Function) FixedPublicKey(pub []byte) PublicKey {
+	return pub
 }

@@ -34,7 +34,7 @@ func noiseNN() HandshakePattern {
 func noiseXX() HandshakePattern {
 	hp := HandshakePattern{}
 	hp.InitiatorPreMessages = []string{"s"}
-	hp.ResponderPreMessages = []string{"rs"}
+	hp.ResponderPreMessages = []string{"s"}
 	hp.MessagePattern = []string{"e", "e,dhee,s,dhse", "s,dhse"}
 	return hp
 }

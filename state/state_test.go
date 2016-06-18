@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	dh "github.com/kelbyludwig/noyz/diffiehellman"
+	//dh "github.com/kelbyludwig/noyz/diffiehellman"
 	"github.com/kelbyludwig/noyz/hash"
 	"github.com/kelbyludwig/noyz/pattern"
 	"io/ioutil"
@@ -66,14 +66,12 @@ func decode(in string) []byte {
 // createEmptyHandshaker is a test helper that creates either an initiator or
 // responder with an hardcoded private DH key.
 func createEmptyHandshaker(v Vector, hp pattern.HandshakePattern, initiator bool) (hs HandshakeState) {
-	emptyPublicKey := dh.PublicKey{}
-	emptyKeyPair := dh.KeyPair{}
 
 	if initiator {
-		hs.Initialize(hp, true, decode(v.InitPrologue), emptyKeyPair, emptyKeyPair, emptyPublicKey, emptyPublicKey)
+		hs.Initialize(hp, true, decode(v.InitPrologue), decode(v.InitStatic), decode(v.InitEphemeral), decode(v.RespStatic), decode(v.RespEphemeral))
 		hs.FixKeysForTesting(v.InitStatic, v.InitEphemeral)
 	} else {
-		hs.Initialize(hp, false, decode(v.RespPrologue), emptyKeyPair, emptyKeyPair, emptyPublicKey, emptyPublicKey)
+		hs.Initialize(hp, false, decode(v.RespPrologue), decode(v.RespStatic), decode(v.RespEphemeral), decode(v.InitStatic), decode(v.InitEphemeral))
 		hs.FixKeysForTesting(v.RespStatic, v.RespEphemeral)
 	}
 	return hs

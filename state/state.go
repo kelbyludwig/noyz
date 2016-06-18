@@ -255,37 +255,52 @@ func (hss *HandshakeState) FixKeysForTesting(ts, te string) {
 }
 
 // Initialize initializes a HandshakeState struct.
-func (hss *HandshakeState) Initialize(handshakePattern pattern.HandshakePattern, initiator bool, prologue []byte, s, e dh.KeyPair, rs, re dh.PublicKey) {
+func (hss *HandshakeState) Initialize(handshakePattern pattern.HandshakePattern, initiator bool, prologue, s, e, rs, re []byte) {
 
 	protocolName := "Noise_" + handshakePattern.HandshakePatternName + "_" + handshakePattern.DiffieHellman + "_" + handshakePattern.SymmetricCipher + "_" + handshakePattern.HashFunction
 	hss.ss = SymmetricState{}
 	hss.ss.InitializeSymmetric([]byte(protocolName))
 	hss.ss.MixHash(prologue)
-	nullKey := make([]byte, hss.ss.cs.dh.DHLen())
 
-	hss.s = s
-	hss.e = e
-	hss.rs = rs
-	hss.re = re
+	hss.s = dh.KeyPair{}
+	hss.e = dh.KeyPair{}
+	hss.rs = dh.PublicKey{}
+	hss.re = dh.PublicKey{}
+
+	if s != nil {
+		hss.s = hss.ss.cs.dh.FixedKeyPair(s)
+	}
+
+	if e != nil {
+		hss.e = hss.ss.cs.dh.FixedKeyPair(e)
+	}
+
+	if rs != nil {
+		hss.rs = hss.ss.cs.dh.FixedPublicKey(rs)
+	}
+
+	if re != nil {
+		hss.re = hss.ss.cs.dh.FixedPublicKey(re)
+	}
 
 	for _, ipm := range handshakePattern.InitiatorPreMessages {
 		switch ipm {
 		case "s":
-			if !s.Initialized {
+			if s == nil {
 				panic("initiator static key not supplied for premessage")
 			}
-			hss.ss.MixHash(s.Public)
+			hss.ss.MixHash(hss.s.Public)
 		case "e":
-			if !e.Initialized {
+			if e == nil {
 				panic("initiator static key not supplied for premessage")
 			}
-			hss.ss.MixHash(e.Public)
+			hss.ss.MixHash(hss.e.Public)
 		case "s,e":
-			if !e.Initialized || !s.Initialized {
+			if e == nil || s == nil {
 				panic("initiator static or ephemeral key not supplied for premessage")
 			}
-			hss.ss.MixHash(s.Public)
-			hss.ss.MixHash(e.Public)
+			hss.ss.MixHash(hss.s.Public)
+			hss.ss.MixHash(hss.e.Public)
 		case "":
 		default:
 			panic("invalid initiator premessage")
@@ -295,25 +310,21 @@ func (hss *HandshakeState) Initialize(handshakePattern pattern.HandshakePattern,
 	for _, rpm := range handshakePattern.ResponderPreMessages {
 		switch rpm {
 		case "s":
-			if string(rs) == string(nullKey) {
+			if rs == nil {
 				panic("responder static key not supplied for premessage")
 			}
-			hss.rs = rs
-			hss.ss.MixHash(rs)
+			hss.ss.MixHash(hss.rs)
 		case "e":
-			if string(re) == string(nullKey) {
+			if re == nil {
 				panic("responder static key not supplied for premessage")
 			}
-			hss.re = re
-			hss.ss.MixHash(re)
+			hss.ss.MixHash(hss.re)
 		case "s,e":
-			if string(re) == string(nullKey) || string(rs) == string(nullKey) {
+			if rs == nil || re == nil {
 				panic("responder static or ephemeral key not supplied for premessage")
 			}
-			hss.rs = rs
-			hss.re = re
-			hss.ss.MixHash(rs)
-			hss.ss.MixHash(re)
+			hss.ss.MixHash(hss.rs)
+			hss.ss.MixHash(hss.re)
 		case "":
 		default:
 			panic("invalid responder premessage")
