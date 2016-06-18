@@ -219,6 +219,13 @@ func TestNoiseNN(t *testing.T) {
 	}
 }
 
+func TestNoiseXX(t *testing.T) {
+	xx := vectors.TestVectors[648]
+	if err := runTestVector(xx); err != nil {
+		t.Errorf("TestNoiseNN: test vector 648 failed: %v\n", err)
+	}
+}
+
 func TestMixHashSHA256(t *testing.T) {
 
 	full := []byte("Testing123")
