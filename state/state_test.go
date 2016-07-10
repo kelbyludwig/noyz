@@ -9,6 +9,7 @@ import (
 	"github.com/kelbyludwig/noyz/hash"
 	"github.com/kelbyludwig/noyz/pattern"
 	"io/ioutil"
+	"log"
 	"os"
 	"testing"
 )
@@ -73,8 +74,7 @@ func createEmptyHandshaker(v Vector, hp pattern.HandshakePattern, initiator bool
 		hs.FixKeysForTesting(v.InitStatic, v.InitEphemeral)
 	} else {
 		hs.SetTesting()
-		hs.Initialize(hp, false, decode(v.RespPrologue), decode(v.InitStatic), decode(v.InitEphemeral), decode(v.RespStatic), decode(v.RespEphemeral))
-		//hs.Initialize(hp, false, decode(v.RespPrologue), decode(v.RespStatic), decode(v.RespEphemeral), decode(v.InitStatic), decode(v.InitEphemeral))
+		hs.Initialize(hp, false, decode(v.RespPrologue), decode(v.RespStatic), decode(v.RespEphemeral), decode(v.InitStatic), decode(v.InitEphemeral))
 		hs.FixKeysForTesting(v.RespStatic, v.RespEphemeral)
 	}
 	return hs
@@ -94,6 +94,7 @@ func runHandshake(v Vector) (ic1, ic2, rc1, rc2 CipherState, err error) {
 		if ic1.HasKey() && ic2.HasKey() && rc1.HasKey() && rc2.HasKey() {
 			return
 		}
+
 		if i%2 == 0 {
 			ic1, ic2 = init.WriteMessage(decode(x.Payload), &messageBufferInit)
 			result := fmt.Sprintf("%x", messageBufferInit)
@@ -101,7 +102,6 @@ func runHandshake(v Vector) (ic1, ic2, rc1, rc2 CipherState, err error) {
 				err = fmt.Errorf("runHandshake: vector failed on message %v: initiators message did not match expected ciphertext", i)
 				return
 			}
-
 			rc1, rc2 = resp.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
 			if result != x.Payload {
@@ -133,7 +133,9 @@ func runTestVector(v Vector) error {
 
 	hp := pattern.Initialize(v.Pattern, v.DH, v.Hash, v.Cipher)
 
+	log.Printf("runTestVector: Creating Initiator\n")
 	init := createEmptyHandshaker(v, hp, true)
+	log.Printf("runTestVector: Creating Responder\n")
 	resp := createEmptyHandshaker(v, hp, false)
 
 	var ic1, ic2, rc1, rc2 CipherState
@@ -183,11 +185,13 @@ func runTestVector(v Vector) error {
 		}
 
 		if i%2 == 0 {
+			log.Printf("runTestVector: Initiator Write\n")
 			ic1, ic2 = init.WriteMessage(decode(x.Payload), &messageBufferInit)
 			result := fmt.Sprintf("%x", messageBufferInit)
 			if result != x.Ciphertext {
 				return fmt.Errorf("runTestVector: vector failed on message %v: initiators message did not match expected ciphertext", i)
 			}
+			log.Printf("runTestVector: Responder Read\n")
 			rc1, rc2 = resp.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
 			if result != x.Payload {
@@ -195,12 +199,14 @@ func runTestVector(v Vector) error {
 			}
 
 		} else {
+			log.Printf("runTestVector: Responder Write\n")
 			ic1, ic2 = resp.WriteMessage(decode(x.Payload), &messageBufferInit)
 			result := fmt.Sprintf("%x", messageBufferInit)
 			if result != x.Ciphertext {
 				return fmt.Errorf("runTestVector: vector failed on message %v: responders message did not match expected ciphertext", i)
 			}
 
+			log.Printf("runTestVector: Initiator Read\n")
 			rc1, rc2 = init.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
 			if result != x.Payload {

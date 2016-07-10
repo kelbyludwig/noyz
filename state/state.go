@@ -6,6 +6,7 @@ import (
 	dh "github.com/kelbyludwig/noyz/diffiehellman"
 	"github.com/kelbyludwig/noyz/hash"
 	"github.com/kelbyludwig/noyz/pattern"
+	//"log"
 	"strings"
 )
 
@@ -38,6 +39,7 @@ type CipherState struct {
 // InitializeKey initializes a CipherState struct
 // and sets the starting nonce and key values.
 func (cs *CipherState) InitializeKey(key []byte) {
+	//log.Printf("InitializeKey: k %x\n", key)
 	cs.k = make([]byte, 32)
 	copy(cs.k, key)
 	cs.n = uint64(0)
@@ -60,6 +62,10 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 			//TODO(kkl): This could be better handled. Instead of a panic, the connection should be killed.
 			panic("nonce max hit!")
 		}
+		//log.Printf("EncryptWithAD: n  %d\n", cs.n)
+		//log.Printf("EncryptWithAD: k  %x\n", cs.k)
+		//log.Printf("EncryptWithAD: ad %x\n", ad)
+		//log.Printf("EncryptWithAD: pt %x\n", plaintext)
 		ct := cs.c.Encrypt(cs.n, cs.k, ad, plaintext)
 		cs.n = cs.n + 1
 		return ct
@@ -87,6 +93,10 @@ func (cs *CipherState) DecryptWithAD(ad, ciphertext []byte) ([]byte, error) {
 			//TODO(kkl): This could be better handled. Instead of a panic, the connection should be killed.
 			panic("nonce max hit!")
 		}
+		//log.Printf("DecryptWithAD: n  %d\n", cs.n)
+		//log.Printf("DecryptWithAD: k  %x\n", cs.k)
+		//log.Printf("DecryptWithAD: ad %x\n", ad)
+		//log.Printf("DecryptWithAD: ct %x\n", ciphertext)
 		plaintext, err := cs.c.Decrypt(cs.n, cs.k, ad, ciphertext)
 		cs.n = cs.n + 1
 		return plaintext, err
@@ -160,6 +170,8 @@ func (ss *SymmetricState) InitializeSymmetric(protocolName []byte) {
 
 // MixKey updates the CipherState keys with the input bytes.
 func (ss *SymmetricState) MixKey(inputKeyMaterial []byte) {
+	//log.Printf("MixKey: ik %x\n", inputKeyMaterial)
+	//log.Printf("MixKey: ck %x\n", ss.ck)
 	ck, tempK := ss.cs.hf.HKDF(ss.ck, inputKeyMaterial)
 	ss.ck = ck
 
@@ -172,8 +184,11 @@ func (ss *SymmetricState) MixKey(inputKeyMaterial []byte) {
 // MixHash updates the SymmetricState hash. MixHash is used to maintain
 // transcript integrity.
 func (ss *SymmetricState) MixHash(data []byte) {
+	//log.Printf("MixHash:     h %x\n", ss.h)
+	//log.Printf("MixHash:     d %x\n", data)
 	temp := append(ss.h, data...)
 	ss.h = ss.cs.hf.Hash(temp)
+	//log.Printf("MixHash: new h %x\n", ss.h)
 }
 
 // EncryptAndHash will encrypt the supplied plaintext and return the
@@ -181,6 +196,8 @@ func (ss *SymmetricState) MixHash(data []byte) {
 // input plaintext.
 func (ss *SymmetricState) EncryptAndHash(plaintext []byte) (ciphertext []byte) {
 	ciphertext = ss.cs.EncryptWithAD(ss.h, plaintext)
+	//log.Printf("EncryptAndHash: h %x\n", ss.h)
+	//log.Printf("EncryptAndHash: p %x\n", plaintext)
 	ss.MixHash(ciphertext)
 	return ciphertext
 }
@@ -189,10 +206,13 @@ func (ss *SymmetricState) EncryptAndHash(plaintext []byte) (ciphertext []byte) {
 // plaintext. If the SymmetricState struct is unitialized, it will return the
 // input ciphertext.
 func (ss *SymmetricState) DecryptAndHash(ciphertext []byte) (plaintext []byte) {
+
 	plaintext, err := ss.cs.DecryptWithAD(ss.h, ciphertext)
 	if err != nil {
 		panic("authentication error. this should kill the connection")
 	}
+	//log.Printf("DecryptAndHash: h %x\n", ss.h)
+	//log.Printf("DecryptAndHash: c %x\n", ciphertext)
 	ss.MixHash(ciphertext)
 	return plaintext
 }
@@ -272,16 +292,22 @@ func (hss *HandshakeState) Initialize(handshakePattern pattern.HandshakePattern,
 	hss.re = dh.PublicKey{}
 
 	if s != nil {
+		//log.Printf("Initialize: fixed local s priv  %x\n", s)
 		hss.s = hss.ss.cs.dh.FixedKeyPair(s)
+		//log.Printf("Initialize: fixed local s publ  %x\n", hss.s.Public)
 	}
 
 	if e != nil {
+		//log.Printf("Initialize: fixed local e priv  %x\n", e)
 		hss.e = hss.ss.cs.dh.FixedKeyPair(e)
+		//log.Printf("Initialize: fixed local e publ  %x\n", hss.e.Public)
 	}
 
 	if rs != nil {
 		if hss.testing {
+			//log.Printf("Initialize: fixed remote s priv %x\n", rs)
 			hss.rs = hss.ss.cs.dh.FixedKeyPair(rs).Public
+			//log.Printf("Initialize: fixed remote s publ %x\n", hss.rs)
 		} else {
 			hss.rs = hss.ss.cs.dh.FixedPublicKey(rs)
 		}
@@ -289,30 +315,49 @@ func (hss *HandshakeState) Initialize(handshakePattern pattern.HandshakePattern,
 
 	if re != nil {
 		if hss.testing {
+			//log.Printf("Initialize: fixed remote e priv %x\n", re)
 			hss.re = hss.ss.cs.dh.FixedKeyPair(re).Public
+			//log.Printf("Initialize: fixed remote e publ %x\n", hss.re)
 		} else {
 			hss.re = hss.ss.cs.dh.FixedPublicKey(re)
 		}
 	}
 
 	for _, ipm := range handshakePattern.InitiatorPreMessages {
+		//log.Printf("Initialize: ipm %s\n", ipm)
 		switch ipm {
 		case "s":
 			if s == nil {
 				panic("initiator static key not supplied for premessage")
 			}
-			hss.ss.MixHash(hss.s.Public)
+			// Initiator premessages should always be mixed first.
+			if initiator {
+				hss.ss.MixHash(hss.s.Public)
+			} else {
+				hss.ss.MixHash(hss.rs)
+			}
 		case "e":
 			if e == nil {
 				panic("initiator static key not supplied for premessage")
 			}
-			hss.ss.MixHash(hss.e.Public)
+			// Initiator premessages should always be mixed first.
+			if initiator {
+				hss.ss.MixHash(hss.e.Public)
+			} else {
+				hss.ss.MixHash(hss.re)
+			}
 		case "s,e":
 			if e == nil || s == nil {
 				panic("initiator static or ephemeral key not supplied for premessage")
 			}
-			hss.ss.MixHash(hss.s.Public)
-			hss.ss.MixHash(hss.e.Public)
+			// Initiator premessages should always be mixed first.
+			if initiator {
+				hss.ss.MixHash(hss.s.Public)
+				hss.ss.MixHash(hss.e.Public)
+			} else {
+				hss.ss.MixHash(hss.rs)
+				hss.ss.MixHash(hss.re)
+			}
 		case "":
 		default:
 			panic("invalid initiator premessage")
@@ -320,23 +365,37 @@ func (hss *HandshakeState) Initialize(handshakePattern pattern.HandshakePattern,
 	}
 
 	for _, rpm := range handshakePattern.ResponderPreMessages {
+		//log.Printf("Initialize: rpm %s\n", rpm)
 		switch rpm {
 		case "s":
 			if rs == nil {
 				panic("responder static key not supplied for premessage")
 			}
-			hss.ss.MixHash(hss.rs)
+			if initiator {
+				hss.ss.MixHash(hss.rs)
+			} else {
+				hss.ss.MixHash(hss.s.Public)
+			}
 		case "e":
 			if re == nil {
 				panic("responder static key not supplied for premessage")
 			}
-			hss.ss.MixHash(hss.re)
+			if initiator {
+				hss.ss.MixHash(hss.re)
+			} else {
+				hss.ss.MixHash(hss.e.Public)
+			}
 		case "s,e":
 			if rs == nil || re == nil {
 				panic("responder static or ephemeral key not supplied for premessage")
 			}
-			hss.ss.MixHash(hss.rs)
-			hss.ss.MixHash(hss.re)
+			if initiator {
+				hss.ss.MixHash(hss.rs)
+				hss.ss.MixHash(hss.re)
+			} else {
+				hss.ss.MixHash(hss.s.Public)
+				hss.ss.MixHash(hss.e.Public)
+			}
 		case "":
 		default:
 			panic("invalid responder premessage")
@@ -367,32 +426,49 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 	}
 
 	for _, t := range tokens {
+		//log.Printf("WriteMessage: ---- token %s ----\n", t)
 		switch t {
 		case "s":
 			if hss.testing {
+				//log.Printf("WriteMessage: fixed static %s\n", hss.ts)
 				hss.s = hss.ss.cs.dh.FixedKeyPair(decode(hss.ts))
 			}
+			//log.Printf("WriteMessage: spub %x\n", hss.s.Public)
 			ct := hss.ss.EncryptAndHash(hss.s.Public)
 			*messageBuffer = append(*messageBuffer, ct...)
 		case "e":
 			if hss.testing {
+				//log.Printf("WriteMessage: fixed e  %s\n", hss.te)
 				hss.e = hss.ss.cs.dh.FixedKeyPair(decode(hss.te))
 			} else {
 				hss.e = hss.ss.cs.dh.GenerateKeyPair()
 			}
 			*messageBuffer = append(*messageBuffer, hss.e.Public...)
+			//log.Printf("WriteMessage: epub     %x\n", hss.e.Public)
 			hss.ss.MixHash(hss.e.Public)
 		case "dhee":
 			o := hss.ss.cs.dh.DH(hss.e, hss.re)
+			//log.Printf("WriteMessage: e  %x\n", hss.e.Public)
+			//log.Printf("WriteMessage: re %x\n", hss.re)
+			//log.Printf("WriteMessage: dhee mix %x\n", o)
 			hss.ss.MixKey(o)
 		case "dhes":
 			o := hss.ss.cs.dh.DH(hss.e, hss.rs)
+			//log.Printf("WriteMessage: e  %x\n", hss.e.Public)
+			//log.Printf("WriteMessage: rs %x\n", hss.rs)
+			//log.Printf("WriteMessage: dhes mix %x\n", o)
 			hss.ss.MixKey(o)
 		case "dhse":
 			o := hss.ss.cs.dh.DH(hss.s, hss.re)
+			//log.Printf("WriteMessage: s  %x\n", hss.s.Public)
+			//log.Printf("WriteMessage: re %x\n", hss.re)
+			//log.Printf("WriteMessage: dhse mix %x\n", o)
 			hss.ss.MixKey(o)
 		case "dhss":
 			o := hss.ss.cs.dh.DH(hss.s, hss.rs)
+			//log.Printf("WriteMessage: s  %x\n", hss.s.Public)
+			//log.Printf("WriteMessage: rs %x\n", hss.rs)
+			//log.Printf("WriteMessage: dhss mix %x\n", o)
 			hss.ss.MixKey(o)
 		default:
 			panic("invalid message pattern token")
@@ -420,32 +496,50 @@ func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c
 		panic("the HandshakeState has no more tokens left in its handshake")
 	}
 	for _, t := range tokens {
+		//log.Printf("ReadMessage: ---- token %s ----\n", t)
 		switch t {
 		case "s":
 			dhl := hss.ss.cs.dh.DHLen()
 			if hss.ss.cs.HasKey() {
 				temp := message[:dhl+16]
 				hss.rs = hss.ss.DecryptAndHash(temp)
+				//log.Printf("ReadMessage: rs  %x\n", hss.rs)
 				message = message[dhl+16:]
 			} else {
 				temp := message[:dhl]
 				hss.rs = hss.ss.DecryptAndHash(temp)
+				//log.Printf("ReadMessage: rs  %x\n", hss.rs)
 				message = message[dhl:]
 			}
 		case "e":
 			dhl := hss.ss.cs.dh.DHLen()
 			hss.re = message[:dhl]
+			//log.Printf("ReadMessage: read re %x\n", hss.re)
 			hss.ss.MixHash(hss.re)
 			message = message[dhl:]
 		case "dhee":
 			o := hss.ss.cs.dh.DH(hss.e, hss.re)
+			//log.Printf("ReadMessage: re %x\n", hss.re)
+			//log.Printf("ReadMessage: e  %x\n", hss.e.Public)
+			//log.Printf("ReadMessage: dhee mix %x\n", o)
 			hss.ss.MixKey(o)
 		case "dhes":
-			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.s, hss.re))
+			o := hss.ss.cs.dh.DH(hss.s, hss.re)
+			//log.Printf("ReadMessage: re %x\n", hss.re)
+			//log.Printf("ReadMessage: s  %x\n", hss.s.Public)
+			//log.Printf("ReadMessage: dhes mix %x\n", o)
+			hss.ss.MixKey(o)
 		case "dhse":
-			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.rs))
+			o := hss.ss.cs.dh.DH(hss.e, hss.rs)
+			//log.Printf("ReadMessage: rs %x\n", hss.rs)
+			//log.Printf("ReadMessage: e  %x\n", hss.e.Public)
+			//log.Printf("ReadMessage: dhse mix %x\n", o)
+			hss.ss.MixKey(o)
 		case "dhss":
 			o := hss.ss.cs.dh.DH(hss.s, hss.rs)
+			//log.Printf("ReadMessage: rs %x\n", hss.rs)
+			//log.Printf("ReadMessage: s  %x\n", hss.s.Public)
+			//log.Printf("ReadMessage: dhss mix %x\n", o)
 			hss.ss.MixKey(o)
 		default:
 			panic("invalid message pattern token")
