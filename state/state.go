@@ -249,9 +249,13 @@ type HandshakeState struct {
 // HandshakeState. This is used for testing purposes and should not be used
 // otherwise.
 func (hss *HandshakeState) FixKeysForTesting(ts, te string) {
-	hss.testing = true
 	hss.ts = ts
 	hss.te = te
+}
+
+// SetTesting will allow the HandshakeState to be used for testing purposes.
+func (hss *HandshakeState) SetTesting() {
+	hss.testing = true
 }
 
 // Initialize initializes a HandshakeState struct.
@@ -276,11 +280,19 @@ func (hss *HandshakeState) Initialize(handshakePattern pattern.HandshakePattern,
 	}
 
 	if rs != nil {
-		hss.rs = hss.ss.cs.dh.FixedPublicKey(rs)
+		if hss.testing {
+			hss.rs = hss.ss.cs.dh.FixedKeyPair(rs).Public
+		} else {
+			hss.rs = hss.ss.cs.dh.FixedPublicKey(rs)
+		}
 	}
 
 	if re != nil {
-		hss.re = hss.ss.cs.dh.FixedPublicKey(re)
+		if hss.testing {
+			hss.re = hss.ss.cs.dh.FixedKeyPair(re).Public
+		} else {
+			hss.re = hss.ss.cs.dh.FixedPublicKey(re)
+		}
 	}
 
 	for _, ipm := range handshakePattern.InitiatorPreMessages {
@@ -433,7 +445,8 @@ func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c
 		case "dhse":
 			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.e, hss.rs))
 		case "dhss":
-			hss.ss.MixKey(hss.ss.cs.dh.DH(hss.s, hss.rs))
+			o := hss.ss.cs.dh.DH(hss.s, hss.rs)
+			hss.ss.MixKey(o)
 		default:
 			panic("invalid message pattern token")
 		}

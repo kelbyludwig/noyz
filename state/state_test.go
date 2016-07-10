@@ -68,10 +68,13 @@ func decode(in string) []byte {
 func createEmptyHandshaker(v Vector, hp pattern.HandshakePattern, initiator bool) (hs HandshakeState) {
 
 	if initiator {
+		hs.SetTesting()
 		hs.Initialize(hp, true, decode(v.InitPrologue), decode(v.InitStatic), decode(v.InitEphemeral), decode(v.RespStatic), decode(v.RespEphemeral))
 		hs.FixKeysForTesting(v.InitStatic, v.InitEphemeral)
 	} else {
-		hs.Initialize(hp, false, decode(v.RespPrologue), decode(v.RespStatic), decode(v.RespEphemeral), decode(v.InitStatic), decode(v.InitEphemeral))
+		hs.SetTesting()
+		hs.Initialize(hp, false, decode(v.RespPrologue), decode(v.InitStatic), decode(v.InitEphemeral), decode(v.RespStatic), decode(v.RespEphemeral))
+		//hs.Initialize(hp, false, decode(v.RespPrologue), decode(v.RespStatic), decode(v.RespEphemeral), decode(v.InitStatic), decode(v.InitEphemeral))
 		hs.FixKeysForTesting(v.RespStatic, v.RespEphemeral)
 	}
 	return hs
@@ -113,7 +116,6 @@ func runHandshake(v Vector) (ic1, ic2, rc1, rc2 CipherState, err error) {
 				err = fmt.Errorf("runHandshake: vector failed on message %v: responders message did not match expected ciphertext", i)
 				return
 			}
-
 			rc1, rc2 = init.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
 			if result != x.Payload {
@@ -186,7 +188,6 @@ func runTestVector(v Vector) error {
 			if result != x.Ciphertext {
 				return fmt.Errorf("runTestVector: vector failed on message %v: initiators message did not match expected ciphertext", i)
 			}
-
 			rc1, rc2 = resp.ReadMessage(messageBufferInit, &payloadBufferInit)
 			result = fmt.Sprintf("%x", payloadBufferInit)
 			if result != x.Payload {
@@ -220,7 +221,14 @@ func TestNoiseNN(t *testing.T) {
 func TestNoiseXX(t *testing.T) {
 	xx := vectors.TestVectors[648]
 	if err := runTestVector(xx); err != nil {
-		t.Errorf("TestNoiseNN: test vector 648 failed: %v\n", err)
+		t.Errorf("TestNoiseXX: test vector 648 failed: %v\n", err)
+	}
+}
+
+func TestNoiseKK(t *testing.T) {
+	kk := vectors.TestVectors[200]
+	if err := runTestVector(kk); err != nil {
+		t.Errorf("TestNoiseKK: test vector 200 failed: %v\n", err)
 	}
 }
 
