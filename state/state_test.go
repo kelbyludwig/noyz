@@ -238,6 +238,25 @@ func TestNoiseKK(t *testing.T) {
 	}
 }
 
+func TestNoiseKX(t *testing.T) {
+	kx := vectors.TestVectors[328]
+	if err := runTestVector(kx); err != nil {
+		t.Errorf("TestNoiseKX: test vector 328 failed: %v\n", err)
+	}
+}
+
+func TestNoiseXK(t *testing.T) {
+	//for i, x := range vectors.TestVectors {
+	//	if x.Name == "Noise_XK_25519_AESGCM_SHA256" {
+	//		t.Errorf("%d\n", i)
+	//	}
+	//}
+	kx := vectors.TestVectors[520]
+	if err := runTestVector(kx); err != nil {
+		t.Errorf("TestNoiseXK: test vector 520 failed: %v\n", err)
+	}
+}
+
 func TestMixHashSHA256(t *testing.T) {
 
 	full := []byte("Testing123")

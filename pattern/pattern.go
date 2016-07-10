@@ -45,6 +45,20 @@ func noiseKK() HandshakePattern {
 	return hp
 }
 
+func noiseKX() HandshakePattern {
+	hp := HandshakePattern{}
+	hp.InitiatorPreMessages = []string{"s"}
+	hp.MessagePattern = []string{"e", "e,dhee,dhes,s,dhse"}
+	return hp
+}
+
+func noiseXK() HandshakePattern {
+	hp := HandshakePattern{}
+	hp.InitiatorPreMessages = []string{"s"}
+	hp.MessagePattern = []string{"e,dhes", "e,dhee", "s,dhse"}
+	return hp
+}
+
 func Initialize(handshakePatternName, diffieHellman, hashFunction, cipher string) (handshakePattern HandshakePattern) {
 
 	switch handshakePatternName {
@@ -54,6 +68,10 @@ func Initialize(handshakePatternName, diffieHellman, hashFunction, cipher string
 		handshakePattern = noiseXX()
 	case "KK":
 		handshakePattern = noiseKK()
+	case "KX":
+		handshakePattern = noiseKX()
+	case "XK":
+		handshakePattern = noiseXK()
 	default:
 		panic("supplied handshake pattern not supported")
 	}
