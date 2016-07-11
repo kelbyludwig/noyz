@@ -45,6 +45,12 @@ func noiseNK() HandshakePattern {
 	return hp
 }
 
+func noiseNX() HandshakePattern {
+	hp := HandshakePattern{}
+	hp.MessagePattern = []string{"e", "e,dhee,s,dhse"}
+	return hp
+}
+
 func noiseXX() HandshakePattern {
 	hp := HandshakePattern{}
 	hp.MessagePattern = []string{"e", "e,dhee,s,dhse", "s,dhse"}
@@ -82,6 +88,8 @@ func Initialize(handshakePatternName, diffieHellman, hashFunction, cipher string
 		handshakePattern = noiseKN()
 	case "NK":
 		handshakePattern = noiseNK()
+	case "NX":
+		handshakePattern = noiseNX()
 	case "XX":
 		handshakePattern = noiseXX()
 	case "KK":

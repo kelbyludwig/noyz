@@ -262,10 +262,16 @@ func TestNoiseKX(t *testing.T) {
 }
 
 func TestNoiseXK(t *testing.T) {
-
 	xk := vectors.TestVectors[520]
 	if err := runTestVector(xk); err != nil {
 		t.Errorf("TestNoiseXK: test vector 520 failed: %v\n", err)
+	}
+}
+
+func TestNoiseNX(t *testing.T) {
+	nx := vectors.TestVectors[264]
+	if err := runTestVector(nx); err != nil {
+		t.Errorf("TestNoiseNX: test vector 264 failed: %v\n", err)
 	}
 }
 
