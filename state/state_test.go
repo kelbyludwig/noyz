@@ -189,6 +189,8 @@ func runTestVector(v Vector) error {
 			ic1, ic2 = init.WriteMessage(decode(x.Payload), &messageBufferInit)
 			result := fmt.Sprintf("%x", messageBufferInit)
 			if result != x.Ciphertext {
+				log.Printf("runTestVector: result %s\n", result)
+				log.Printf("runTestVector: expect %s\n", x.Ciphertext)
 				return fmt.Errorf("runTestVector: vector failed on message %v: initiators message did not match expected ciphertext", i)
 			}
 			log.Printf("runTestVector: Responder Read\n")
@@ -246,11 +248,7 @@ func TestNoiseKX(t *testing.T) {
 }
 
 func TestNoiseXK(t *testing.T) {
-	//for i, x := range vectors.TestVectors {
-	//	if x.Name == "Noise_XK_25519_AESGCM_SHA256" {
-	//		t.Errorf("%d\n", i)
-	//	}
-	//}
+
 	kx := vectors.TestVectors[520]
 	if err := runTestVector(kx); err != nil {
 		t.Errorf("TestNoiseXK: test vector 520 failed: %v\n", err)

@@ -62,10 +62,10 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 			//TODO(kkl): This could be better handled. Instead of a panic, the connection should be killed.
 			panic("nonce max hit!")
 		}
-		//log.Printf("EncryptWithAD: n  %d\n", cs.n)
-		//log.Printf("EncryptWithAD: k  %x\n", cs.k)
-		//log.Printf("EncryptWithAD: ad %x\n", ad)
-		//log.Printf("EncryptWithAD: pt %x\n", plaintext)
+		//log.Printf("EncryptWithAD:  n  %d\n", cs.n)
+		//log.Printf("EncryptWithAD:  k  %x\n", cs.k)
+		//log.Printf("EncryptWithAD:  ad %x\n", ad)
+		//log.Printf("EncryptWithAD:  pt %x\n", plaintext)
 		ct := cs.c.Encrypt(cs.n, cs.k, ad, plaintext)
 		cs.n = cs.n + 1
 		return ct
@@ -184,20 +184,20 @@ func (ss *SymmetricState) MixKey(inputKeyMaterial []byte) {
 // MixHash updates the SymmetricState hash. MixHash is used to maintain
 // transcript integrity.
 func (ss *SymmetricState) MixHash(data []byte) {
-	//log.Printf("MixHash:     h %x\n", ss.h)
-	//log.Printf("MixHash:     d %x\n", data)
+	//log.Printf("MixHash:         d %x\n", data)
 	temp := append(ss.h, data...)
 	ss.h = ss.cs.hf.Hash(temp)
-	//log.Printf("MixHash: new h %x\n", ss.h)
+	//log.Printf("MixHash:     new h %x\n", ss.h)
 }
 
 // EncryptAndHash will encrypt the supplied plaintext and return the
 // ciphertext. If the SymmetricState struct is unitialized, it will return the
 // input plaintext.
 func (ss *SymmetricState) EncryptAndHash(plaintext []byte) (ciphertext []byte) {
+	//log.Printf("EncryptAndHash: h  %x\n", ss.h)
+	//log.Printf("EncryptAndHash: p  %x\n", plaintext)
 	ciphertext = ss.cs.EncryptWithAD(ss.h, plaintext)
-	//log.Printf("EncryptAndHash: h %x\n", ss.h)
-	//log.Printf("EncryptAndHash: p %x\n", plaintext)
+	//log.Printf("EncryptAndHash: ct %x\n", ciphertext)
 	ss.MixHash(ciphertext)
 	return ciphertext
 }
@@ -476,6 +476,7 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 	}
 
 	p := hss.ss.EncryptAndHash(payload)
+	//log.Printf("WriteMessage: app %x\n", p)
 	*messageBuffer = append(*messageBuffer, p...)
 	if len(hss.mp) == 0 {
 		return hss.ss.Split()
