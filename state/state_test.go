@@ -226,6 +226,18 @@ func TestNoiseNN(t *testing.T) {
 	}
 }
 
+func TestNoiseKN(t *testing.T) {
+	//for i, x := range vectors.TestVectors {
+	//	if x.Name == "Noise_KN_25519_AESGCM_SHA256" {
+	//		t.Errorf("%d\n", i)
+	//	}
+	//}
+	kn := vectors.TestVectors[72]
+	if err := runTestVector(kn); err != nil {
+		t.Errorf("TestNoiseKN: test vector 72 failed: %v\n", err)
+	}
+}
+
 func TestNoiseXX(t *testing.T) {
 	xx := vectors.TestVectors[648]
 	if err := runTestVector(xx); err != nil {
@@ -249,8 +261,8 @@ func TestNoiseKX(t *testing.T) {
 
 func TestNoiseXK(t *testing.T) {
 
-	kx := vectors.TestVectors[520]
-	if err := runTestVector(kx); err != nil {
+	xk := vectors.TestVectors[520]
+	if err := runTestVector(xk); err != nil {
 		t.Errorf("TestNoiseXK: test vector 520 failed: %v\n", err)
 	}
 }
