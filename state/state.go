@@ -15,7 +15,7 @@ import (
 const NONCEMAX uint64 = 18446744073709551615
 
 // CipherState contains k and n variables, which it uses to encrypt and
-// decrypt ciphertexts.  During the handshake phase each party has a single
+// decrypt ciphertexts. During the handshake phase each party has a single
 // CipherState, but during the transport phase each party has two CipherState
 // objects: one for sending, and one for receiving.
 type CipherState struct {
@@ -76,10 +76,6 @@ func (cs *CipherState) EncryptWithAD(ad, plaintext []byte) []byte {
 		// of a ciphertext is not an error. It just simplifies the API
 		// and state machine. In other words, assuming the implementation is sound
 		// the only time this will happen is prior to *any* DH operations.
-
-		// NOTE(kkl): I think this comment is an interesting
-		// assumption. Might be worth testing.
-
 		return plaintext
 	}
 }
@@ -476,7 +472,6 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 	}
 
 	p := hss.ss.EncryptAndHash(payload)
-	//log.Printf("WriteMessage: app %x\n", p)
 	*messageBuffer = append(*messageBuffer, p...)
 	if len(hss.mp) == 0 {
 		return hss.ss.Split()
