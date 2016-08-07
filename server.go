@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/kelbyludwig/noyz/noise"
+	"io"
 	"log"
 	"net"
 )
@@ -21,20 +22,21 @@ func main() {
 
 		if err != nil {
 			log.Printf("accept: %v\n", err)
-			continue
 		}
 
 		go func(c net.Conn) {
-
 			defer c.Close()
 			defer log.Printf("closing...")
-
 			buf := make([]byte, 256)
-			n, err := c.Read(buf)
-			if err != nil {
-				log.Printf("read: %v\n", err)
+			for {
+				n, err := c.Read(buf)
+				if err != nil && err != io.EOF {
+					log.Printf("read: error %v\n", err)
+				}
+				if n > 0 {
+					log.Printf("success!: %s\n", buf[:n])
+				}
 			}
-			log.Printf("success! %v\n", buf[:n])
 		}(conn)
 	}
 

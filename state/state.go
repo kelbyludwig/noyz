@@ -405,6 +405,7 @@ func (hss *HandshakeState) Initialize(handshakePattern pattern.HandshakePattern,
 
 // WriteMessage takes a payload byte sequence which may be zero-length, and a
 // messageBuffer to write the output into.
+//TODO(kkl): WriteMessage and ReadMessage don't need pointer parameters for the second argument because they are slices.
 func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (c1, c2 CipherState) {
 
 	var tokens []string
@@ -481,6 +482,7 @@ func (hss *HandshakeState) WriteMessage(payload []byte, messageBuffer *[]byte) (
 
 // ReadMessage takes a byte sequence containing a Noise handshake message, and
 // a payloadBuffer to write the message's plaintext payload into.
+// TODO(kkl): payloadBuffer should not be a pointer.
 func (hss *HandshakeState) ReadMessage(message []byte, payloadBuffer *[]byte) (c1, c2 CipherState) {
 
 	var tokens []string

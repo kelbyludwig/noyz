@@ -22,4 +22,14 @@ func main() {
 	}
 
 	log.Printf("wrote %v bytes\n", n)
+
+	n, err = conn.Write([]byte("testing again!"))
+
+	if err != nil {
+		log.Printf("write: %v\n", err)
+		return
+	}
+
+	log.Printf("wrote %v bytes\n", n)
+
 }

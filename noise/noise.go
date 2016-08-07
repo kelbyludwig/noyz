@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/kelbyludwig/noyz/pattern"
 	"github.com/kelbyludwig/noyz/state"
+	"io"
+	"log"
 	"net"
 	"time"
 )
@@ -35,43 +37,44 @@ func (l listener) Accept() (conn net.Conn, err error) {
 		return
 	}
 
+	log.Printf("accept: accepted connection\n")
+	log.Printf("accept: setting up handshakestate\n")
+
 	nz := Noyz{}
 	nz.hs = state.HandshakeState{}
 	hp := pattern.Initialize("NN", "25519", "SHA256", "AESGCM")
 	nz.hs.Initialize(hp, false, nil, nil, nil, nil, nil)
 
-	var c1, c2 state.CipherState
-	var messageBuffer, payloadBuffer []byte
-	for {
-		_, err := conn.Read(payloadBuffer)
-		if err != nil {
-			return conn, fmt.Errorf("failed to read initiator payload")
-		}
-		c1, c2 = nz.hs.ReadMessage(messageBuffer, &payloadBuffer)
-
-		if c1.HasKey() && c2.HasKey() {
-			nz.conn = conn
-			nz.recvr = c2
-			nz.sendr = c1
-			return nz, nil
-		}
-
-		c1, c2 = nz.hs.WriteMessage(payloadBuffer, &messageBuffer)
-
-		if c1.HasKey() && c2.HasKey() {
-			nz.conn = conn
-			nz.recvr = c2
-			nz.sendr = c1
-			return nz, nil
-		}
-
-		_, err = conn.Write(messageBuffer)
-
-		if err != nil {
-			return conn, fmt.Errorf("failed to write responder payload")
-		}
-
+	log.Printf("accept: should be getting a public key\n")
+	payloadBuffer := make([]byte, 128)
+	n, err := conn.Read(payloadBuffer)
+	log.Printf("accept: read %v bytes %v\n", n, payloadBuffer[:n])
+	if err != nil && err != io.EOF {
+		return conn, err
 	}
+
+	log.Printf("accept: formulating a response\n")
+	var readOutputBuffer, writeOutputBuffer []byte
+	nz.hs.ReadMessage(payloadBuffer[:n], &readOutputBuffer)
+	c1, c2 := nz.hs.WriteMessage(readOutputBuffer, &writeOutputBuffer)
+	n, err = conn.Write(writeOutputBuffer)
+	log.Printf("accept: wrote %v bytes to connection %v\n", n, writeOutputBuffer[:n])
+
+	if err != nil && err != io.EOF {
+		return conn, fmt.Errorf("failed to write responder payload")
+	}
+
+	if c1.HasKey() && c2.HasKey() {
+		log.Printf("accept: handshake complete\n")
+		nz.conn = conn
+		nz.recvr = c2
+		nz.sendr = c1
+		return nz, nil
+	} else {
+		log.Printf("accept: handshake failed\n")
+		return nz, fmt.Errorf("handshake failed\n")
+	}
+
 }
 
 func (l listener) Close() error {
@@ -101,49 +104,51 @@ func Dial(network, addr string, config *Config) (net.Conn, error) {
 
 	nz := Noyz{}
 	nz.hs = state.HandshakeState{}
+	log.Printf("dial: dialing")
 	conn, err := net.Dial(network, addr)
 
 	if err != nil {
 		return conn, err
 	}
 
+	log.Printf("dial: initializing handshakestate")
 	hp := pattern.Initialize("NN", "25519", "SHA256", "AESGCM")
 	nz.hs.Initialize(hp, true, nil, nil, nil, nil, nil)
 
-	var c1, c2 state.CipherState
-	var messageBuffer, payloadBuffer []byte
-	for {
-		c1, c2 = nz.hs.WriteMessage(payloadBuffer, &messageBuffer)
+	log.Printf("dial: sending public key\n")
+	var publicKeyBuffer []byte
+	nz.hs.WriteMessage([]byte{}, &publicKeyBuffer)
+	log.Printf("dial: publicKeyBuffer size %v\n", len(publicKeyBuffer))
+	n, err := conn.Write(publicKeyBuffer)
+	log.Printf("dial: sent %v bytes from publicKeyBuffer %v\n", n, publicKeyBuffer)
 
-		if c1.HasKey() && c2.HasKey() {
-			nz.conn = conn
-			nz.recvr = c1
-			nz.sendr = c2
-			return nz, nil
-		}
-
-		_, err = conn.Write(messageBuffer)
-
-		if err != nil {
-			return conn, fmt.Errorf("noise handshake failure: %v\n", err)
-		}
-
-		_, err = conn.Read(payloadBuffer)
-
-		if err != nil {
-			return conn, fmt.Errorf("noise handshake failure: %v\n", err)
-		}
-
-		c1, c2 = nz.hs.ReadMessage(messageBuffer, &payloadBuffer)
-
-		if c1.HasKey() && c2.HasKey() {
-			nz.conn = conn
-			nz.recvr = c1
-			nz.sendr = c2
-			return nz, nil
-		}
+	if err != nil && err != io.EOF {
+		return conn, fmt.Errorf("noise handshake failure: %v\n", err)
 	}
 
+	log.Printf("dial: reading public key\n")
+	publicKeyBuffer = make([]byte, 128)
+	n, err = conn.Read(publicKeyBuffer)
+	log.Printf("dial: read %v bytes from responder %v\n", n, publicKeyBuffer[:n])
+
+	if err != nil && err != io.EOF {
+		return conn, fmt.Errorf("noise handshake failure: %v\n", err)
+	}
+
+	log.Printf("dial: readmessage\n")
+	var outputBuffer []byte
+	c1, c2 := nz.hs.ReadMessage(publicKeyBuffer[:n], &outputBuffer)
+
+	if c1.HasKey() && c2.HasKey() {
+		log.Printf("dial: handshake done")
+		nz.conn = conn
+		nz.recvr = c1
+		nz.sendr = c2
+		return nz, nil
+	} else {
+		log.Printf("dial: handshake failed\n")
+		return nz, fmt.Errorf("handshake failed")
+	}
 }
 
 // Read reads data from the connection. Read can be made to time out and
@@ -165,6 +170,8 @@ func (nz Noyz) Read(b []byte) (n int, err error) {
 	//read 2 bytes to determine the length of the incoming payload.
 	toRead := (int(readBuf[0]) << 8) + int(readBuf[1])
 
+	log.Printf("read: i should be reading %v bytes\n", toRead)
+
 	if toRead > len(b) {
 		return 0, fmt.Errorf("buffer size smaller than payload")
 	}
@@ -175,7 +182,8 @@ func (nz Noyz) Read(b []byte) (n int, err error) {
 	for {
 		if n == toRead {
 
-			plaintext, rerr := nz.recvr.DecryptWithAD([]byte{}, readBuf)
+			log.Printf("read: decrypting %v\n", readBuf[:toRead])
+			plaintext, rerr := nz.recvr.DecryptWithAD([]byte{}, readBuf[:toRead])
 			if rerr != nil {
 				return 0, rerr
 			}
@@ -207,17 +215,23 @@ func (nz Noyz) Write(b []byte) (n int, err error) {
 		return 0, fmt.Errorf("message too large")
 	}
 
+	log.Printf("write: encrypting plaintext %v\n", b)
+
 	ciphertext := nz.sendr.EncryptWithAD([]byte{}, b)
+
+	log.Printf("write: ciphertext %v\n", ciphertext)
 
 	if err != nil {
 		return 0, err
 	}
 
 	lc := len(ciphertext)
+	log.Printf("write: length of ciphertext %v\n", lc)
 	frame := make([]byte, lc+2)
 	frame[0] = byte(lc >> 8)
 	frame[1] = byte(lc & 0x00ff)
 	copy(frame[2:], ciphertext)
+	log.Printf("write: writing frame %v\n", frame)
 
 	return nz.conn.Write(frame)
 }
