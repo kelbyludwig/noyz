@@ -14,7 +14,7 @@ import (
 const FRAMEMAX int = 65533
 
 type Config struct {
-	//Rand io.Reader
+	Rand io.Reader
 	//TODO(kkl): Config should include static keys, pre-messages, noise pattern, etc.
 }
 

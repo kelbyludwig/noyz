@@ -23,7 +23,7 @@ func main() {
 
 	log.Printf("wrote %v bytes\n", n)
 
-	n, err = conn.Write([]byte("testing again!"))
+	n, err = conn.Write([]byte("The quick brown fox jumped over the brown lazy dog"))
 
 	if err != nil {
 		log.Printf("write: %v\n", err)
