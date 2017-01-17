@@ -1,6 +1,6 @@
 ## noyz
 
-An implementation of Noise Protocol. This is not fully implemented.
+An implementation of the Noise Protocol primitives. Please don't use this for security sensitive purposes.
 
 #### Running tests
 
